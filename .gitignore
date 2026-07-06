@@ -13,4 +13,4 @@ __pycache__/
 .venv/
 venv/
 
-.DS_Store.DS_Store
+.DS_Store
