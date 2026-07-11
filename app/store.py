@@ -1,66 +1,154 @@
 """
 SQLite persistence for validation reports.
-Parses the flat report schema into validation_runs + validation_issues.
+Uses SQLAlchemy Core so the same code works against SQLite locally
+and Postgres on Render — only the DATABASE_URL env var changes.
 """
 
 import os
-import sqlite3
 from datetime import datetime, timezone
 
-DB_PATH = os.environ.get("EHR_DB_PATH", "ehr_triage.db")
-SCHEMA_PATH = os.path.join(os.path.dirname(__file__), "..", "db", "schema.sql")
+from sqlalchemy import (
+    create_engine, text,
+    MetaData, Table, Column,
+    Integer, String, Text
+)
+from dotenv import load_dotenv
+
+load_dotenv()
+
+# SQLite locally, Postgres on Render.
+# Local default keeps backward compatibility with existing dev workflow.
+DATABASE_URL = os.environ.get(
+    "DATABASE_URL",
+    f"sqlite:///{os.path.join(os.path.dirname(__file__), '..', 'ehr_triage.db')}"
+)
+
+# Render injects postgres:// but SQLAlchemy 2.x requires postgresql://
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+
+engine = create_engine(DATABASE_URL)
+metadata = MetaData()
+
+validation_runs = Table(
+    "validation_runs", metadata,
+    Column("run_id",         Integer, primary_key=True, autoincrement=True),
+    Column("payload_id",     String,  nullable=False),
+    Column("encounter_date", String),
+    Column("status",         String,  nullable=False),
+    Column("issue_count",    Integer, nullable=False, default=0),
+    Column("model",          String,  nullable=False),
+    Column("source_system",  String),
+    Column("run_at",         String,  nullable=False),
+    # Phase 2 routing columns
+    Column("routing_domain",  String),   # billing | clinical | identity | admin | clean
+    Column("escalated",       Integer, default=0),  # 0 or 1
+    Column("routing_reason",  Text),     # which field(s) triggered escalation
+    Column("llm_summary",     Text),     # plain-English summary from LLM (escalated records only)
+)
+
+validation_issues = Table(
+    "validation_issues", metadata,
+    Column("issue_id",    Integer, primary_key=True, autoincrement=True),
+    Column("run_id",      Integer, nullable=False),
+    Column("field",       String,  nullable=False),
+    Column("problem",     Text,    nullable=False),
+    Column("severity",    String,  nullable=False),
+    Column("remediation", Text),
+)
 
 
-def init_db(db_path: str = DB_PATH):
-    """Create tables from schema.sql. Drops and recreates."""
-    with open(SCHEMA_PATH) as f:
-        schema = f.read()
-    conn = sqlite3.connect(db_path)
-    conn.executescript(schema)
-    conn.commit()
-    conn.close()
+def init_db():
+    """Reset tables: DROP then CREATE. Destructive — wipes existing data.
+    Use only for an explicit reset, not on every boot."""
+    metadata.drop_all(engine)
+    metadata.create_all(engine)
 
 
-def save_report(report: dict, model: str, source_system: str = None, db_path: str = DB_PATH) -> int:
-    """Write one validation report. Returns the run_id."""
-    conn = sqlite3.connect(db_path)
-    conn.execute("PRAGMA foreign_keys = ON")
-    cur = conn.cursor()
-    _insert_report(cur, report, model, source_system)
-    run_id = cur.lastrowid
-    conn.commit()
-    conn.close()
-    return run_id
+def ensure_tables():
+    """Create any missing tables without dropping existing ones. Idempotent and
+    safe to call on every boot — preserves data already in the DB."""
+    metadata.create_all(engine)
 
 
-def _insert_report(cur, report, model, source_system):
-    cur.execute(
-        "INSERT INTO validation_runs (payload_id, encounter_date, status, issue_count, model, source_system, run_at) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?)",
-        (
-            report["payload_id"], report.get("encounter_date"),
-            report["status"], report["issue_count"],
-            model, source_system,
-            datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-        ),
+def _insert_report(conn, report, model, source_system, routing=None):
+    """Insert one report. routing is an optional dict from the Phase 2 router."""
+    routing = routing or {}
+    result = conn.execute(
+        validation_runs.insert().values(
+            payload_id=report["payload_id"],
+            encounter_date=report.get("encounter_date"),
+            status=report["status"],
+            issue_count=report["issue_count"],
+            model=model,
+            source_system=source_system,
+            run_at=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            routing_domain=routing.get("domain"),
+            escalated=1 if routing.get("escalated") else 0,
+            routing_reason=routing.get("reason"),
+            llm_summary=routing.get("llm_summary"),
+        )
     )
-    run_id = cur.lastrowid
+    run_id = result.inserted_primary_key[0]
     for issue in report["issues"]:
-        cur.execute(
-            "INSERT INTO validation_issues (run_id, field, problem, severity, remediation) "
-            "VALUES (?, ?, ?, ?, ?)",
-            (run_id, issue["field"], issue["problem"], issue["severity"], issue.get("remediation")),
+        conn.execute(
+            validation_issues.insert().values(
+                run_id=run_id,
+                field=issue["field"],
+                problem=issue["problem"],
+                severity=issue["severity"],
+                remediation=issue.get("remediation"),
+            )
         )
     return run_id
 
 
-def save_reports_bulk(items, model: str, db_path: str = DB_PATH) -> int:
-    """Write many reports on one connection. items = list of (report, source_system). Returns count."""
-    conn = sqlite3.connect(db_path)
-    conn.execute("PRAGMA foreign_keys = ON")
-    cur = conn.cursor()
-    for report, source_system in items:
-        _insert_report(cur, report, model, source_system)
-    conn.commit()
-    conn.close()
+def save_report(report, model, source_system=None, routing=None):
+    """Write one report. Returns run_id."""
+    with engine.begin() as conn:
+        return _insert_report(conn, report, model, source_system, routing)
+
+
+def save_reports_bulk(items, model):
+    """Write many reports. items = list of (report, source_system) tuples. Returns count."""
+    with engine.begin() as conn:
+        for report, source_system in items:
+            _insert_report(conn, report, model, source_system)
     return len(items)
+
+
+def get_stats():
+    """Return summary stats for the /stats endpoint."""
+    with engine.connect() as conn:
+        runs = conn.execute(text(
+            "SELECT COUNT(*) AS total, "
+            "SUM(CASE WHEN status='pass' THEN 1 ELSE 0 END) AS passed "
+            "FROM validation_runs"
+        )).mappings().one()
+
+        by_sev = {
+            row["severity"]: row["n"]
+            for row in conn.execute(text(
+                "SELECT severity, COUNT(*) AS n "
+                "FROM validation_issues GROUP BY severity"
+            )).mappings()
+        }
+
+        by_domain = {
+            row["routing_domain"]: row["n"]
+            for row in conn.execute(text(
+                "SELECT routing_domain, COUNT(*) AS n "
+                "FROM validation_runs "
+                "WHERE routing_domain IS NOT NULL "
+                "GROUP BY routing_domain"
+            )).mappings()
+        }
+
+    total = runs["total"] or 0
+    return {
+        "total_runs": total,
+        "passed": runs["passed"] or 0,
+        "pass_rate_pct": round(100.0 * (runs["passed"] or 0) / total, 1) if total else None,
+        "issues_by_severity": by_sev,
+        "records_by_domain": by_domain,
+    }
