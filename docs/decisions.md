@@ -1,8 +1,14 @@
 # Decision Log — EHR Triage Pipeline
 
-**Append-only.** The durable record of *why*. Add a dated entry per significant decision; never
-rewrite/delete — if a decision reverses, add a new entry that supersedes it. Format per entry:
-**Decision · Why · Refs/supersedes.**
+**Append-only** (ADR-lite). The durable record of *why*. One decision per entry; never rewrite/delete
+— if a decision reverses, add a new entry that **supersedes** the old one (name it).
+
+**Log a decision when** it is hard to reverse, involves a real trade-off, affects multiple parts, or
+the same question has been debated twice.
+
+**Entry format:** **Decision** · **Status** (accepted | proposed | superseded by &lt;date&gt;) · **Why**
+(context + rationale) · **Consequences** (what it commits us to / gives up) · **Refs** (spec/plan/files).
+*(Older entries below predate this format and keep Decision · Why · Refs — that's fine; append-only.)*
 
 ---
 
@@ -62,3 +68,16 @@ fixtures, including a regression guard on the temp-71.2°F miss; **(2) code revi
 `/code-review`. *Why:* the brief had "verify by running" but no test suite and no review step; these
 close the gap without changing the thesis. Commit-convention overrides (`[type]` format, no Claude
 trailer) also saved to project memory so they persist across sessions.
+
+## 2026-07-11 — Formalized the session-handoff protocol
+**Decision:** Add `docs/session-protocol.md` (start/end-of-session ritual + git-based staleness check
++ quality gate), upgrade `handoff.md` to a staleness-block + "dead ends" template, and tighten this
+log to ADR-lite (Status + Consequences). Handoff history = overwrite + git history (no archive
+folder). No separate project "memory doc." · **Status:** accepted · **Why:** a thorough scan of
+external best practice (ADRs; Claude Code / agent session-handoff guidance) converged on what the
+onboarding brief already sketched, but flagged three gaps we had — recording *what's actually in
+place* (not "done"), capturing *failed attempts*, and *verifying handoffs against git before
+trusting them*. Sessions span days here, so stale handoffs are a real risk. · **Consequences:** one
+more doc to keep current each session; in exchange, a fresh session can reconstruct state reliably.
+The memory/`decisions.md`/`handoff.md` boundary is now written down so nothing gets duplicated. ·
+**Refs:** `docs/session-protocol.md`, `docs/handoff.md`.

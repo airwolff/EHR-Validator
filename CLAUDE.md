@@ -50,6 +50,7 @@ FastAPI + Uvicorn · SQLAlchemy Core (same code → SQLite local / Postgres on R
 - **Blocker Rule:** don't guess — stub, mark `# BLOCKED`, log in open-questions.md, report.
 
 ## Docs (start-here order)
+0. `docs/session-protocol.md` — the start/end-of-session ritual + which doc holds what (read once).
 1. `docs/phase-checklist.md` — what to work on now (source of truth for scope).
 2. `docs/handoff.md` — where the last session left off (verify before trusting).
 3. `docs/decisions.md` — the durable "why".
