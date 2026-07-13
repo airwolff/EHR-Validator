@@ -197,3 +197,30 @@ reshuffle between identical runs. Schema change ⇒ DB reset: `python load_resul
 `agent_processed_at`, `record_agent_result`, `get_noted_records`, `get_worklist`,
 `WORKLIST_DOMAIN_ORDER`), `tests/test_store_findings.py`, plan Task 5 (deviates: no `batch_date` on
 `get_noted_records`; `save_agent_findings` + `mark_processed` collapsed into `record_agent_result`).
+
+## 2026-07-13 — Lyzr Starter plan ($19/mo, 2,000 credits): buy evidence, not a new architecture
+**Decision:** upgrade to Lyzr **Starter** (2,000 credits/mo). **The architecture does not change.**
+Record/replay (Task 8) and the credit ledger (Task 7) are **kept**; the ledger's hard cap is raised
+(free-tier value was ~2 live calls) rather than removed. Prompts stay in our repo (`specialists.py`),
+**not** in Lyzr's UI, even though Starter's 15-agent allowance now makes two deployed agents possible.
+A new **Task 13** is added: run the rules-vs-LLM comparison **N times** over the fixtures and report
+the LLM's miss rate. · **Status:** accepted · **Why:** a batch run is array-in/array-out — ≤2 calls,
+so ~2 credits. The free tier's 20 credits/mo = ~10 total runs: enough to build and demo once, with
+**zero** room to iterate a prompt or rehearse. Starter = ~1,000 runs, so the constraint stops binding.
+The thing that buys is **evidence for the thesis**: CLAUDE.md's argument is that the LLM *silently
+drops issues the script catches*, and on the free tier that comparison was affordable roughly **once**
+— a single unrepeatable sample, and if the agent had a good night there'd be no finding to present.
+Run it N times and the claim becomes a number ("the agent missed the SpO2=105 critical in X of N
+runs"), which is the strongest slide in the deck. Second: a live demo can now be rehearsed without
+burning the month's budget. · **Consequences:** record/replay is **not** a credit workaround and does
+not get ripped out — network-free tests are deterministic, fast and free in CI, which is correct
+regardless of budget; what changes is that recordings can now be **regenerated** freely instead of
+hoarded. The ledger stays for the same reason: a hard spend-gate in front of LLM calls is a genuine
+engineering artifact and a portfolio talking point — deleting it to save an hour would delete the
+talking point. Prompts stay in git because version-controlled, diffable prompts are the better
+engineering story and they survive Lyzr going away; the 15-agent allowance changes this from a
+constraint into a *choice*, and the choice is still repo-side. Starter also adds 7-day trace logs —
+screenshot them for the presentation. Note the free tier remained *sufficient* to ship: $19 bought
+iteration headroom, demo safety and quantified evidence, not a feature otherwise unshippable.
+· **Refs:** plan Tasks 7, 8, 12; new Task 13; `docs/phase-checklist.md`; supersedes the handoff's
+"Lyzr deployment shape" open decision (resolved: one generic agent, prompts in `specialists.py`).

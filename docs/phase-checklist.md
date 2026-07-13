@@ -35,7 +35,14 @@ Live tracker for the current phase. Tick a box only when **verified by running i
         cannot lose or double-count findings. Inbox is **empty until Task 11** — no fixture carries
         a `clinical_note` yet. See `docs/decisions.md`.*
   - [ ] Tasks 6–12: see `docs/superpowers/plans/2026-07-09-multi-agent-triage.md`
-        (Task 6 = finding schema + verbatim-evidence guard)
+        (Task 6 = finding schema + verbatim-evidence guard). **Only Task 12 makes a live Lyzr call**
+        — Tasks 6–11 run against recorded responses and cost nothing.
+  - [ ] **Task 13 (new, 2026-07-13): rules-vs-LLM comparison, N runs.** Run the LLM over the same
+        fixtures the rules ran over, N times, and report the miss rate ("the agent missed the
+        SpO2=105 critical in X of N runs"). This is the thesis-as-evidence slide, and it is what the
+        Lyzr **Starter** upgrade was bought for — the free tier afforded this comparison roughly
+        *once*. Keep the credit ledger and record/replay; raise the ledger cap, don't remove it.
+        See `docs/decisions.md` (2026-07-13) and OQ #4 (RESOLVED).
 - [ ] **LLM escalation** — escalated records only → Lyzr → plain-English summary + cross-field
       contradiction detection (NOT re-validation). Test on fixtures only (credit budget)
 - [ ] **Postgres swap + Render deploy** — same SQLAlchemy Core code, switch DB URL (gated by OQ#3)
