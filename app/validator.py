@@ -203,6 +203,17 @@ class LocalValidator:
                         "critical", "Reconcile patient sex vs diagnosis; one is a data error."))
                     break   # one contradiction per record; don't repeat the same defect
 
+        # 7. labs: ordered-vs-resulted set difference (deterministic)
+        for idx, lab in enumerate(payload.get("labs", [])):
+            if lab.get("ordered") and not lab.get("resulted"):
+                issues.append(_issue(f"labs[{idx}].resulted",
+                    f"Lab '{lab.get('test')}' was ordered but never resulted.",
+                    "warning", "Confirm result was filed or cancel the order."))
+            if lab.get("resulted") and not lab.get("ordered"):
+                issues.append(_issue(f"labs[{idx}].ordered",
+                    f"Lab '{lab.get('test')}' has a result with no matching order.",
+                    "warning", "Attach the result to an order or verify provenance."))
+
         return {
             "payload_id": enc.get("encounter_id") or "UNKNOWN",
             "encounter_date": enc.get("encounter_date"),

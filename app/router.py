@@ -16,7 +16,7 @@ Domain priority order (when multiple domains have failures):
 
 Field → domain mapping:
   billing:  facility_npi, provider_npi, procedures[*].code, procedures[*].code_system
-  clinical: vitals.*, diagnoses[*].code, diagnoses[*].code_system
+  clinical: vitals.*, diagnoses[*].code, diagnoses[*].code_system, labs[*].*
   identity: patient.patient_id, patient.dob, patient.sex, patient.age
   admin:    encounter.encounter_id, encounter.encounter_date,
             metadata.extract_timestamp, metadata.source_system
@@ -51,6 +51,8 @@ def _field_to_domain(field: str) -> str:
     if field.startswith("procedures["):
         return "billing"
     if field.startswith("diagnoses["):
+        return "clinical"
+    if field.startswith("labs["):
         return "clinical"
     if field.startswith("vitals."):
         return "clinical"
