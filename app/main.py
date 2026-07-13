@@ -50,7 +50,7 @@ def validate(payload: dict):
     routing = route(report)
     source = payload.get("metadata", {}).get("source_system")
     run_id = save_report(
-        report, model=validator.name, source_system=source, routing=routing
+        report, model=validator.name, source_system=source, routing=routing, payload=payload
     )
 
     report["run_id"] = run_id

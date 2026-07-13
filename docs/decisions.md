@@ -145,3 +145,21 @@ visible: **any** issue, including an `info`, sets `status: "fail"`, so an unmapp
 failed record. Left as-is; revisit if it muddies the demo. · **Refs:** `app/validator.py`
 (`SEX_UNDECLARED`, `SEX_SYNONYMS`, `_normalise_sex`, section 6), `tests/test_validator_sex_codes.py`,
 plan Task 2.
+
+## 2026-07-13 — `/validate` and `load_results.py` must persist the same thing
+**Decision:** `save_reports_bulk` now takes `(report, source_system, routing, payload)` tuples, and
+both writer paths — `POST /validate` and `load_results.py` (fixtures *and* bulk) — persist routing +
+`payload_json`. `payload_json` added to `validation_runs`. · **Status:** accepted · **Why:** the two
+writers had silently drifted. `/validate` routed each record; the loader did not — so **every row in
+the demo DB had `routing_domain = NULL`**, and `/stats` + the domain SQL analytics reported nothing
+by domain. Since the loader is how records actually reach the DB in bulk, the entire Phase-2 routing
+feature was invisible in the data it was built to analyse. Nothing failed loudly: the column existed,
+the inserts succeeded, the numbers were just empty. · **Consequences:** a schema change needs a real
+DB reset — `ensure_tables()` is `create_all`, which creates missing *tables* but **never adds a
+column to an existing table**. So the app boots clean and then dies on the first insert with "no such
+column". Tests never catch this (they build a fresh DB per test); only the long-lived demo DB does.
+After any column addition: `python load_results.py --fixtures` (drops, recreates, reloads). The
+general rule: **when two code paths write the same table, a test must pin both** — `payload_json`
+alone would have passed while the bulk path still dropped it. · **Refs:** `app/store.py`
+(`payload_json`, `save_reports_bulk`), `load_results.py`, `app/main.py`,
+`tests/test_store_payload.py::test_bulk_load_persists_payload_and_routing`, plan Task 4.

@@ -4,6 +4,7 @@ Uses SQLAlchemy Core so the same code works against SQLite locally
 and Postgres on Render — only the DATABASE_URL env var changes.
 """
 
+import json
 import os
 from datetime import datetime, timezone
 
@@ -45,6 +46,7 @@ validation_runs = Table(
     Column("escalated",       Integer, default=0),  # 0 or 1
     Column("routing_reason",  Text),     # which field(s) triggered escalation
     Column("llm_summary",     Text),     # plain-English summary from LLM (escalated records only)
+    Column("payload_json",    Text),     # raw record JSON, for the nightly agent batch
 )
 
 validation_issues = Table(
@@ -71,8 +73,10 @@ def ensure_tables():
     metadata.create_all(engine)
 
 
-def _insert_report(conn, report, model, source_system, routing=None):
-    """Insert one report. routing is an optional dict from the Phase 2 router."""
+def _insert_report(conn, report, model, source_system, routing=None, payload=None):
+    """Insert one report. routing is an optional dict from the Phase 2 router.
+    payload is the raw record; stored so the nightly agent batch can re-read the
+    note/labs without the caller having to keep the original file around."""
     routing = routing or {}
     result = conn.execute(
         validation_runs.insert().values(
@@ -87,6 +91,7 @@ def _insert_report(conn, report, model, source_system, routing=None):
             escalated=1 if routing.get("escalated") else 0,
             routing_reason=routing.get("reason"),
             llm_summary=routing.get("llm_summary"),
+            payload_json=json.dumps(payload) if payload is not None else None,
         )
     )
     run_id = result.inserted_primary_key[0]
@@ -103,17 +108,22 @@ def _insert_report(conn, report, model, source_system, routing=None):
     return run_id
 
 
-def save_report(report, model, source_system=None, routing=None):
+def save_report(report, model, source_system=None, routing=None, payload=None):
     """Write one report. Returns run_id."""
     with engine.begin() as conn:
-        return _insert_report(conn, report, model, source_system, routing)
+        return _insert_report(conn, report, model, source_system, routing, payload)
 
 
 def save_reports_bulk(items, model):
-    """Write many reports. items = list of (report, source_system) tuples. Returns count."""
+    """Write many reports in one transaction. Returns count.
+
+    items = list of (report, source_system, routing, payload) tuples. routing and
+    payload are optional per item, but dropping them here silently empties both the
+    /stats domain breakdown and the nightly agent batch's source of records.
+    """
     with engine.begin() as conn:
-        for report, source_system in items:
-            _insert_report(conn, report, model, source_system)
+        for report, source_system, routing, payload in items:
+            _insert_report(conn, report, model, source_system, routing, payload)
     return len(items)
 
 

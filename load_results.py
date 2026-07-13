@@ -18,6 +18,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(__file__))
 from app.validator import get_validator
+from app.router import route
 from app.store import init_db, save_report, save_reports_bulk
 
 
@@ -31,7 +32,7 @@ def load_bulk(validator, path):
             payload = json.loads(line)
             report = validator.validate(payload)
             source = payload.get("metadata", {}).get("source_system")
-            items.append((report, source))
+            items.append((report, source, route(report), payload))
     save_reports_bulk(items, model=validator.name)
     passed = sum(1 for r, _ in items if r["status"] == "pass")
     return len(items), passed
@@ -44,9 +45,11 @@ def load_fixtures(validator, payload_dir):
             payload = json.load(f)
         report = validator.validate(payload)
         source = payload.get("metadata", {}).get("source_system")
-        run_id = save_report(report, model=validator.name, source_system=source)
+        routing = route(report)
+        run_id = save_report(report, model=validator.name, source_system=source,
+                             routing=routing, payload=payload)
         print(f"  {os.path.basename(path):32s} -> {report['status']:4s}  "
-              f"({report['issue_count']} issue(s))  run_id={run_id}")
+              f"({report['issue_count']} issue(s))  {routing['domain']:8s} run_id={run_id}")
     return len(files)
 
 
