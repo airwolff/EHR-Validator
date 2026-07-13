@@ -17,7 +17,14 @@ Live tracker for the current phase. Tick a box only when **verified by running i
   - [x] Task 1: pytest harness + temp-71.2 regression guard — *verified 2026-07-13: 2 passed; guard
         proven to bite (widening the temp hard-bound flips critical→warning and reds the test).
         Fixtures tracked at `tests/fixtures/payloads/` so a fresh clone runs green.*
-  - [ ] Tasks 2–12: see `docs/superpowers/plans/2026-07-09-multi-agent-triage.md`
+  - [x] Task 2: sex-restricted diagnosis-code rule — *verified 2026-07-13: fires on a definite M/F
+        (after normalising "m"/"male"); an undeclared sex ("prefer not to say", unknown, other,
+        absent) yields **no issue at any severity** and suppresses the rule. `patient.sex` dropped
+        from REQUIRED — declining to answer was scoring `critical`. See `docs/decisions.md`.*
+  - [x] Task 3: `labs[]` + ordered-vs-resulted rule — *verified 2026-07-13: warning on either
+        mismatch; lab defects now route to **clinical**, not the `admin` catch-all (would have
+        skewed the domain breakdown in the SQL analytics).*
+  - [ ] Tasks 4–12: see `docs/superpowers/plans/2026-07-09-multi-agent-triage.md`
 - [ ] **LLM escalation** — escalated records only → Lyzr → plain-English summary + cross-field
       contradiction detection (NOT re-validation). Test on fixtures only (credit budget)
 - [ ] **Postgres swap + Render deploy** — same SQLAlchemy Core code, switch DB URL (gated by OQ#3)
