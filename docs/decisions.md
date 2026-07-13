@@ -286,3 +286,37 @@ committed copy would let a stale checkout resurrect an old spend count. **`fcntl
 fine on macOS and Render, would need revisiting on Windows. · **Refs:** `app/agents/ledger.py`,
 `tests/test_agents_ledger.py`, plan Task 7 (deviates: monthly buckets, env budget, atomic write +
 lock, explicit fail-closed).
+
+## 2026-07-13 — a recording belongs to the question that produced it, and live mode fails closed
+
+**Decision:** `app/agents/transport.py` is the only code in the project that talks to Lyzr. Answers are
+saved to disk and replayed for free, and a recording is filed under the specialist **plus a
+fingerprint (truncated SHA-256) of the exact message we sent** — not under the specialist alone, as
+plan Task 8 had it. `Replayer.response_for` therefore takes `(specialist, message)`, one argument more
+than the plan's interface. Live mode requires a `CreditLedger` and an `agent_id` or it **refuses**;
+`ledger=None` no longer means "no cap". The HTTP call gets a 60s timeout and raises `LiveCallFailed`
+carrying the **status code**. Recordings are **committed**, and their location is overridable via
+`LYZR_RECORDINGS_DIR`. · **Status:** accepted · **Why:** **filing by specialist alone serves the wrong
+patient's answer, silently.** One file per specialist, overwritten each live run, means a replay over
+records that were never recorded returns whatever the last run produced. Every finding must quote *its
+own* note (Task 6), so those findings would then be dropped as fabricated — **the drop rate on the
+presentation slide would be measuring our own bug, not the model's honesty.** With a fingerprint, an
+unrecorded input raises `FileNotFoundError` and says so. The stored question is also **compared on
+read**: the fingerprint picks the file, the question inside proves it is the right one, so the
+guarantee does not rest on a 12-character filename that can be hand-copied or collide. **`ledger=None`
+meaning unlimited is the same fail-open hole the ledger exists to close** — a stray `EHR_ENGINE=lyzr`
+and a loop is all it takes. · **Consequences:** **`message` must be a pure function of the records** —
+a timestamp, a uuid or an unsorted dict inside `build_message` (Task 9) would change the fingerprint on
+every run, so no replay would ever hit and a live batch would re-pay for records it already recorded.
+This is now stated in `get_response`'s docstring and must be pinned by a determinism test in Task 9.
+**The credit is charged BEFORE the call**, so a Lyzr 500 still costs one — deliberate, because charging
+afterwards lets a runaway loop drain the budget before the ledger hears about it; losing one credit to
+their 500 is the cheaper mistake, and the docstring says so to stop a well-meaning refactor reordering
+it. Errors never interpolate the `Request` (urllib puts headers, and therefore the **API key**, into
+some exceptions — the key was rotated after an exposure once already); the status code carries no
+secret and is included, because at one credit per retry "the call failed" cannot distinguish a wrong
+key (401) from a wrong agent id (404) from a rate limit (429). Crash-safe writing is now shared by the
+ledger and the recordings in `app/agents/_fileio.py`. · **Refs:** `app/agents/transport.py`,
+`app/agents/_fileio.py`, `tests/test_agents_transport.py`, plan Task 8 (deviates: fingerprinted
+recording key + stored-question check, ledger and agent_id required in live mode, HTTP timeout +
+status code, `LYZR_RECORDINGS_DIR`).

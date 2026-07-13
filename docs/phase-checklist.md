@@ -51,9 +51,20 @@ Live tracker for the current phase. Tick a box only when **verified by running i
         across the read-modify-write** (a race let two spenders past the cap — the test reds without
         the lock), and an unreadable ledger raises **`LedgerCorrupt`** instead of reading as 0 spent.
         Ledger file gitignored under both names. See `docs/decisions.md`.*
-  - [ ] Tasks 8–12: see `docs/superpowers/plans/2026-07-09-multi-agent-triage.md`
-        (Task 8 = record/replay + live client seam). **Only Task 12 makes a live Lyzr call** —
-        Tasks 8–11 run against recorded responses and cost nothing.
+  - [x] Task 8: record/replay transport + isolated live seam — *verified 2026-07-13: 102 passed;
+        record→replay round-trip, and all three refusals (unrecorded question, live-with-no-ledger,
+        live-with-no-credits) demonstrated outside pytest with zero network calls. Deviates from the
+        plan: recordings are keyed by specialist **+ a fingerprint of the exact message** (keying by
+        specialist alone silently serves one patient's answer for another patient's chart, and the
+        Task-6 guard would then report those findings as hallucinated — **our bug, scored as the
+        model's**); the stored question is re-checked on read; `ledger=None` in live mode now
+        **refuses** instead of meaning "no cap"; HTTP timeout + status code in the error (never the
+        API key). `message` must be **deterministic** — pin that in Task 9. See `docs/decisions.md`.*
+  - [ ] Tasks 9–12: see `docs/superpowers/plans/2026-07-09-multi-agent-triage.md`
+        (Task 9 = specialist definitions). **Only Task 12 makes a live Lyzr call** — Tasks 9–11 run
+        against recorded responses and cost nothing. **Task 9 must include a determinism test on
+        `build_message`** (same records → byte-identical text), or replay never hits and every live
+        batch re-pays for records it already recorded.
   - [ ] **Task 13 (new, 2026-07-13): rules-vs-LLM comparison, N runs.** Run the LLM over the same
         fixtures the rules ran over, N times, and report the miss rate ("the agent missed the
         SpO2=105 critical in X of N runs"). This is the thesis-as-evidence slide, and it is what the

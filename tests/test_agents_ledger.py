@@ -174,8 +174,8 @@ def test_the_ledger_file_is_never_left_truncated(tmp_path):
     led = CreditLedger(str(p), budget=20, month="2026-07")
     led.spend()
     assert json.loads(p.read_text()) == {"months": {"2026-07": 1}}
-    # The lock file is expected and stays; a leftover .ledger-*.tmp is not.
-    leftovers = [f for f in os.listdir(tmp_path) if f.startswith(".ledger-")]
+    # The lock file is expected and stays; a leftover .tmp-*.partial is not.
+    leftovers = [f for f in os.listdir(tmp_path) if f.startswith(".tmp-")]
     assert leftovers == []
 
 

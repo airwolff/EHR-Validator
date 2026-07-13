@@ -21,9 +21,10 @@ import fcntl
 import json
 import os
 import re
-import tempfile
 from contextlib import contextmanager
 from datetime import datetime
+
+from app.agents._fileio import atomic_write_text
 
 MONTH_KEY = re.compile(r"^\d{4}-(0[1-9]|1[0-2])$")
 
@@ -155,27 +156,6 @@ class CreditLedger:
             self._write(months)
 
     def _write(self, months):
-        """Atomic: a crash mid-write must not leave a truncated file that the next run has
-        to call corrupt (which would then block every live call until a human intervened).
-
-        The directory is fsynced too, not just the file — otherwise the data is durable but
-        the RENAME may not be, and a power loss reverts the ledger to the previous count,
-        making already-spent credits spendable again."""
-        directory = os.path.dirname(os.path.abspath(self.path))
-        os.makedirs(directory, exist_ok=True)
-        fd, tmp = tempfile.mkstemp(dir=directory, prefix=".ledger-", suffix=".tmp")
-        try:
-            with os.fdopen(fd, "w") as f:
-                json.dump({"months": months}, f)
-                f.flush()
-                os.fsync(f.fileno())
-            os.replace(tmp, self.path)
-            dir_fd = os.open(directory, os.O_RDONLY)
-            try:
-                os.fsync(dir_fd)
-            finally:
-                os.close(dir_fd)
-        except BaseException:
-            if os.path.exists(tmp):
-                os.unlink(tmp)
-            raise
+        """Crash-safe: a truncated ledger would be read as corrupt and block every live call
+        until a human intervened. See app/agents/_fileio.py for why a plain write is unsafe."""
+        atomic_write_text(self.path, json.dumps({"months": months}))
