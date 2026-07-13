@@ -23,6 +23,16 @@ Postgres swap + Render deploy is a remaining Phase-2 item. Deploy now or after t
 expires in 30 days — don't start the clock before the demo window.)
 **Blocks:** Postgres swap, Render deploy.
 
+## #5 — Adjudicator agent (the one genuinely *agentic* addition)
+**Status:** DEFERRED (2026-07-13) — revisit only if Tasks 6–13 land with time left before Jul 17.
+When the clinical and identity specialists produce **conflicting** findings on the same record, a
+third LLM call adjudicates the conflict. This is real cross-agent reasoning and rules genuinely
+cannot do it (it is a judgment over two models' disagreement), so it *strengthens* the
+deterministic-first thesis rather than contradicting it. Cheap: fires only on conflict, ~1 call.
+**The catch:** with 5–7 fixtures the specialists may never actually disagree, so demoing it could
+require engineering a conflict — which is a bit staged. Decide with real batch output in hand.
+**Blocks:** nothing. Everything through Task 13 proceeds without it.
+
 ---
 ## Resolved
 _(move items here with the resolution + date as they close)_
