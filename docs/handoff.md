@@ -6,120 +6,130 @@ how to use/update this file. **Verify the staleness block below before trusting 
 
 ## Staleness block (check before trusting)
 - **Written:** 2026-07-13
-- **HEAD at write time:** `c50244d` (branch `main`, in sync with `origin/main`)
-- **Uncommitted at write time:** ` M CLAUDE.md` (new communication rules; commit with this handoff)
-- **Tests:** `python -m pytest -q` → **64 passed** (verified 2026-07-13)
+- **HEAD at write time:** `8d9c3e3` (branch `main`, in sync with `origin/main`)
+- **Uncommitted at write time:** clean
+- **Tests:** `python -m pytest -q` → **141 passed** (verified 2026-07-13)
 - **Boots?** Yes — `python -c "import app.main"` → `boots` (verified 2026-07-13)
-- **Staleness test:** if `git rev-parse --short HEAD` ≠ `c50244d` or `git status -s` differs, this
+- **Staleness test:** if `git rev-parse --short HEAD` ≠ `8d9c3e3` or `git status -s` differs, this
   handoff is stale — trust git + code, rewrite it early.
+
+## ⚠️ READ THIS BEFORE AUDITING OR "FIXING" ANYTHING
+
+**The code deliberately disagrees with the plan in ~15 places.** Every one of them was a
+`/code-review` finding, each is recorded in `docs/decisions.md`, and each is pinned by a named test.
+An auditor (or a fresh session) reading `docs/superpowers/plans/2026-07-09-multi-agent-triage.md`
+side-by-side with the code **will find all of them and want to revert them.** Reverting any one
+silently reintroduces a bug we already paid to find.
+
+**Read `docs/decisions.md` FIRST. Treat everything in it as settled** unless you can show the
+*reasoning* is wrong — not merely that the code differs from the plan. The plan is a historical
+document; `decisions.md` supersedes it.
+
+The load-bearing deviations, by task:
+
+| Task | Plan says | Code does | Reverting it causes |
+|---|---|---|---|
+| 5 | `get_noted_records(batch_date)`; save + mark as two calls | no date param; **one transaction** (`record_agent_result`) | findings written twice, or a record leaves the inbox with defects unreported |
+| 6 | `keep_grounded` discards drops; any substring is evidence | `partition_findings` returns **all drops with reasons**; `MIN_EVIDENCE_CHARS=6`; Unicode folded | the drop rate (the thesis evidence) is uncountable; a model "grounds" an invented finding on `"a"`; a curly apostrophe reads as a hallucination |
+| 7 | lifetime credit counter, hardcoded budget | **per-month buckets**, `LYZR_CREDIT_BUDGET` (default 15), `flock`, fail-closed on corrupt | cap blocks a fresh billing month; two processes both slip past the budget; a corrupt ledger reads as "0 spent" |
+| 8 | recordings keyed by **specialist name** | keyed by specialist **+ fingerprint of the message**; stored question re-checked on read | **one patient's answer served for another patient's chart, silently** |
+| 8 | `ledger=None` in live mode = no cap | live mode **refuses** without a ledger | an unbudgeted live path |
+| 9 | `parse_findings` returns `[]` on junk | **raises `ResponseUnparseable`** | a broken agent scores as a *perfect* one, and Task 13's miss rate measures silence |
+| 9 | contract names fields but never defines them | contract **enumerates domains/severities from `schema.py`'s own constants** | the model's sensible guess is tallied as *its* unreliability — our prompt's defect on its scorecard |
+| 10 | stamp only records that HAVE findings | **stamp every record**, cleared ones included | every clean record re-read and re-paid for, forever |
+| 10 | write per specialist | **one write per record**, all specialists together | a crash mid-batch stamps a record with half a review — permanently |
+| 10 | (no such case) | unreadable reply **aborts the batch + quarantines the recording** | a junk recording replays forever and wedges the pipeline offline |
 
 ## Where we are
 
-**Plan Tasks 1–6 DONE and pushed. Tasks 7–13 untouched.** Still **zero Lyzr calls made** — by
-design. Correct the old handoff's claim that "Task 5 starts the Lyzr layer": it does not.
-**Only Task 12 makes a live call.** Tasks 7–11 run against *recorded* responses and cost nothing.
+**Plan Tasks 1–10 DONE and pushed. Tasks 11–13 untouched. Still ZERO Lyzr calls made** — by design.
+**Only Tasks 12 and 13 spend credits** (~2 per batch run; Task 13 is ~2×N). Task 11 costs nothing: a
+recording is just a file we write.
 
-Landed this session (each verified by running):
+Landed this session (Tasks 7–10), each verified by running:
 
-- **Task 5 — `agent_findings` table + batch inbox** (`57816d8`). Agent findings live in their own
-  table, never in `validation_issues` — that separation *is* the presentation argument. Two
-  deviations from the plan, both deliberate:
-  - The plan's `get_noted_records(batch_date)` **never used its own `batch_date` param**. It now
-    takes **no** date. The inbox is `payload_json IS NOT NULL AND agent_processed_at IS NULL`.
-  - New column **`agent_processed_at`**, stamped for every record the batch reads — *including ones
-    it clears*. A cleared record writes zero findings, so "no findings" cannot mean "not processed"
-    or the batch re-reads (and re-pays for) every clean record forever.
-  - The plan's `save_agent_findings` + `mark_processed` pair is collapsed into **one function in one
-    transaction**: `record_agent_result(run_id, findings, batch_date)`. Two calls had two silent
-    failure modes (die between them → findings written twice on the next run; stamp-then-fail → the
-    record leaves the inbox forever with its defects unreported). Both now unreachable.
-- **Task 6 — finding schema + evidence guard** (`c50244d`). `app/agents/schema.py`, pure functions.
-  Four deviations, all from `/code-review`:
-  - `partition_findings` returns `(kept, dropped)` with **all** reasons per drop. The plan discarded
-    them — but **the drop rate IS the thesis evidence** ("the agent cited text that isn't in the note
-    for M of N findings"). Reasons are collected in full, not first-match-wins, or the hallucination
-    rate is undercounted by whatever share of bad findings were *also* malformed.
-  - `is_valid_finding` validates **values**, not just key presence. `severity: "banana"` used to pass
-    — and `store.WORKLIST_DOMAIN_ORDER` sorts an unknown domain *silently last*, so junk would reach
-    the DB and sink in the worklist unseen (the Task-3 labs skew, again).
-  - **`MIN_EVIDENCE_CHARS = 6`.** The plan accepted any substring, so a model could "ground" a wholly
-    invented finding on `"a"` or `"the"`. 6 blocks that while keeping real short quotes ("A1c 6.9",
-    "room air").
-  - **Unicode punctuation folded** in `_norm`. Models re-type quotes with curly apostrophes; unfolded,
-    a *real* finding gets dropped as `evidence_not_in_note` — a **false hallucination inflating the
-    exact number the presentation rests on**.
-
-Current demo DB (reloaded 2026-07-13 via `python load_results.py --fixtures`): 5 runs, 1 passed,
-`{critical: 11, warning: 3, info: 1}`, domains `{billing: 1, clean: 1, identity: 3}`.
+- **Task 7 — credit ledger** (`3b0d20c`). `app/agents/ledger.py`. Per-month buckets, `flock` across
+  the read-modify-write (the concurrency test **reds without it** — two threads both read 14/15 and
+  both wrote 15), atomic writes, `LedgerCorrupt` rather than "0 spent". Budget from
+  `LYZR_CREDIT_BUDGET`, **default 15** — free-tier-safe, so cancelling Starter needs no code change.
+- **Task 8 — record/replay transport** (`240d685`). `app/agents/transport.py` is the **only** code
+  that talks to Lyzr. Recordings are filed under specialist + fingerprint of the exact message.
+- **Task 9 — specialists** (`a988e09`). `app/agents/specialists.py`. Clinical and identity agents,
+  each seeing only its own slice. **The Task-8 determinism trap is CLOSED** — shuffled records
+  produce an identical fingerprint (demonstrated outside pytest).
+- **Task 10 — nightly batch** (`8d9c3e3`). `app/agents/batch.py`. **Ran end-to-end against a real
+  SQLite DB:** a record that passes every deterministic rule → the identity agent catches the
+  wrong-patient note → `{records: 1, returned: 3, kept: 1, dropped: 2, unknown_record: 1}`. That
+  single run *is* the presentation: rules find nothing, the LLM finds the real thing, and **2 of the
+  3 things it said were junk** — caught, counted, never shown to a human.
 
 ## ► Next step (do this first)
 
-**Plan Task 7 — credit ledger.** `docs/superpowers/plans/2026-07-09-multi-agent-triage.md` line 618.
-Note the ledger's cap is now **raised, not removed** (see Lyzr Starter below) — keep the ledger; it
-is a real engineering artifact and a portfolio talking point, not a free-tier workaround.
+**Plan Task 11 — demo fixtures + end-to-end test.** Plan line ~1116.
 
-Same loop as Tasks 2–6: failing test → **watch it fail** → implement → `/code-review` → approval →
+Two payloads: `payloads/payload_wrong_patient_note.json` (every structured field valid, note
+describes a different person — the wow catch) and `payloads/payload_note_clean.json` (note agrees
+with the data — the false-positive guard, must yield **zero** findings).
+
+**The plan's recorded responses for Task 11 are STALE — do not copy them.** They are named
+`identity.json` / `clinical.json` and their findings carry `encounter_id`. Recordings are now keyed
+by a fingerprint of the message (Task 8) and findings carry `record_id` (Task 9). **Generate them
+from the real `build_message()` output** — `tests/test_agents_batch.py::record_reply` already does
+exactly this and is the pattern to copy. Costs nothing.
+
+Same loop as Tasks 2–10: failing test → **watch it fail** → implement → `/code-review` → approval →
 commit → push.
 
 ## Open decisions
 
-- **`.env` still needs `agent_id` + Lyzr key** — create the agent in Lyzr Studio. **Deferred to Task
-  12 by decision** (open-questions #4). Nothing before Task 12 needs it. Their Studio layout changed
-  recently — search current docs, don't trust old instructions.
-- `docs/open-questions.md`: **#1/#2/#3 OPEN** (gate the Web UI + Render deploy, i.e. the *last* two
-  checklist items — they do not block Tasks 7–13). **#4 RESOLVED**, **#5 DEFERRED** (adjudicator).
+- **`.env` still needs `LYZR_AGENT_ID` + the key** — create the agent in Lyzr Studio. Needed for
+  **Task 12 only**. Their Studio layout changed recently — search current docs, don't trust old
+  instructions.
+- `docs/open-questions.md`: **#1/#2/#3 OPEN** (gate the Web UI + Render deploy — the *last* two
+  checklist items; they do not block Tasks 11–13). **#4 RESOLVED**, **#5 DEFERRED** (adjudicator).
 
 ## Dead ends — don't retry
 
-- **The agent inbox is EMPTY until Task 11.** `get_noted_records()` returns `[]` against the real
-  demo DB — **no current fixture has a `clinical_note`**. This is expected, not a bug. Task 11 adds
-  the noted fixtures (plan lines 1116/1133), including the zero-rule-issue record the agents catch
-  and the rules miss. **Nothing moves end-to-end before Task 11** — consider pulling it ahead of
-  Task 10 if you want to watch the pipeline actually run.
-- **The evidence guard is NOT an injection defence** — the plan calls it one; that claim is wrong and
-  we've stopped making it. An attack carried *in the note* is, by construction, a verbatim quote of
-  the note, so the guard keeps it. Also **verbatim ≠ faithful**: the note says "Denies dysuria" and a
-  model can claim the patient *has* it while citing "dysuria". Both limits are **pinned by
-  `test_LIMIT_*` tests in `tests/test_agents_schema.py`** — they are documented limits, **not bugs to
-  fix**. A human adjudicates the worklist; that is the mitigation, and it is *why* the output is a
-  worklist and not an auto-correction. See `docs/for-review.md`.
-- **Don't add an LLM router** to look more agentic. A deterministic router already does that job —
-  swapping in a model puts an LLM exactly where rules *do* reach, undermining the thesis.
+- **The evidence guard is NOT an injection defence**, and **verbatim ≠ faithful** (the note says
+  "Denies dysuria"; a model can claim the patient HAS it while quoting "dysuria"). Both limits are
+  pinned by `test_LIMIT_*` in `tests/test_agents_schema.py`. They are **documented limits, not bugs
+  to fix**. A human adjudicates the worklist — that is the mitigation, and it is *why* the output is
+  a worklist and not an auto-correction.
+- **Don't add an LLM router.** A deterministic router already does that job; swapping in a model
+  puts an LLM exactly where rules *do* reach, undermining the thesis.
 - **Don't trigger the agents off `escalated`/rule-criticals.** Selection is on **note-presence** — a
   zero-rule-issue record (the wow catch) must still be processed.
 - **Don't edit `router.py`'s `DOMAIN_PRIORITY`.** Worklist precedence (`store.WORKLIST_DOMAIN_ORDER`)
   is a *separate* sort.
-- **Don't rip out record/replay or the credit ledger** now that credits are plentiful — see below.
+- **Don't rip out record/replay or the credit ledger** now that credits are plentiful. Network-free
+  tests are correct engineering at any budget, and a hard spend-gate is a talking point.
 - **Don't run two CC sessions on this repo at once** (this is what made the 2026-07-11 handoff stale).
 
 ## Gotchas / carry-forward
 
-- **Lyzr upgraded to Starter — $19/mo, 2,000 credits** (was 20). A batch run is ~2 credits, so ~1,000
-  runs/mo vs ~10 *total* on free. **Architecture unchanged.** Record/replay and the ledger stay:
-  network-free tests are correct engineering regardless of budget, and a hard spend-gate is a
-  talking point. What it bought is **evidence** — the rules-vs-LLM comparison can now be run N times
-  and reported as a number. That's **new Task 13** on the checklist. See `docs/decisions.md`.
+- **Recordings are committed, and that is deliberate** (`app/agents/recordings/`). Synthetic data
+  only. It is what lets a fresh clone — or a mentor — run the whole pipeline offline for free.
 - **`VALID_DOMAINS` (schema.py) and `WORKLIST_DOMAIN_ORDER` (store.py) must stay identical.** Pinned
-  by `test_valid_domains_match_the_worklist_sort_order`. A domain valid in one and unranked in the
-  other sorts silently to the bottom of the worklist.
+  by a test. A domain valid in one and unranked in the other sorts silently to the bottom.
+- **The specialist prompts are generated from `schema.py`'s constants.** Don't hardcode the domain
+  list into the prompt — that is how the prompt and the guard drift apart, and the drift is scored
+  against the model.
 - **A schema change needs a real DB reset — `ensure_tables()` will NOT save you.** It is
-  `metadata.create_all`: it creates missing *tables* but **never adds a column to an existing table**.
-  The app boots clean, then dies on first insert with `no such column`. Tests never catch it (fresh
-  DB each). After any column addition: `python load_results.py --fixtures`.
-- **When two code paths write the same table, a test must pin both.** Task 4's `payload_json` test
-  passed while the *bulk* path silently dropped payload and routing.
-- **`/code-review` keeps earning its keep.** It caught the `"sex": "m"` false negative (Task 2), the
-  labs routing skew (Task 3), the un-routing loader (Task 4), the two-transaction findings hole
-  (Task 5), and the trivially-defeatable evidence check + the Unicode false-hallucination (Task 6).
-  Every one was silent and would have survived a green suite. Run it before every commit.
-- **Stale `.pyc` can lie to you.** Bytecode is validated on source *size + mtime-seconds*. If a result
-  makes no sense: `find . -name __pycache__ -type d -exec rm -rf {} +` and re-run.
-- **A crashing hook silently stops guarding.** Both hooks fail **open, deliberately**. If you edit
-  them, keep that property — and test with `printf`, never `echo`.
-- **`.gitignore` patterns match at any depth.** Check `git check-ignore -v <path>` before assuming a
-  new file is trackable.
-- **Pre-existing quirk, left alone:** *any* issue — even an `info` — sets `status: "fail"`.
-- **Communication:** be a robot, not a friend — report output, don't narrate or sell the work. Every
-  choice gets a one-sentence pro **and** con. Now in `CLAUDE.md`.
+  `metadata.create_all`: it creates missing *tables*, never adds a column to an existing one. After
+  any column addition: `python load_results.py --fixtures`.
+- **`fcntl` is POSIX-only** (ledger + batch locks). Fine on macOS and Render; revisit on Windows.
+- **In live mode the credit is charged BEFORE the call**, so a Lyzr 500 still costs one. Deliberate —
+  charging afterwards lets a runaway loop drain the budget before the ledger hears about it. Do not
+  reorder; the docstring says so for a reason.
+- **`/code-review` keeps earning its keep.** It caught the `"sex": "m"` false negative (T2), the labs
+  routing skew (T3), the un-routing loader (T4), the two-transaction findings hole (T5), the
+  trivially-defeatable evidence check (T6), the wrong gitignore path + the self-bricking float spend
+  (T7), the cross-patient recording bug (T8), the prose-wrapped-answer false failure (T9), and the
+  same-day empty worklist + the pipeline-wedging junk recording (T10). **Every one was silent and
+  would have survived a green suite. Run it before every commit.**
+- **Stale `.pyc` can lie to you.** If a result makes no sense:
+  `find . -name __pycache__ -type d -exec rm -rf {} +` and re-run.
+- **Communication:** be a robot, not a friend. **No unexplained jargon — including in design
+  discussions.** Every choice gets a one-sentence pro **and** con.
 - Commit `[type] short desc`; **no `Co-Authored-By: Claude` trailer**. **Explicit approval before any
   commit/push.** Verify by running, not asserting.
