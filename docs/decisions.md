@@ -163,3 +163,37 @@ general rule: **when two code paths write the same table, a test must pin both**
 alone would have passed while the bulk path still dropped it. · **Refs:** `app/store.py`
 (`payload_json`, `save_reports_bulk`), `load_results.py`, `app/main.py`,
 `tests/test_store_payload.py::test_bulk_load_persists_payload_and_routing`, plan Task 4.
+
+## 2026-07-13 — the agent batch's inbox is marked, not inferred; findings + marker are one write
+**Decision:** `validation_runs` gains an `agent_processed_at` column, stamped once the nightly agent
+batch has looked at a record — whether or not it produced findings. `get_noted_records()` takes **no
+`batch_date`** and returns noted records where `agent_processed_at IS NULL`. Writing findings and
+stamping the marker is a **single function in a single transaction** — `record_agent_result(run_id,
+findings, batch_date)`; there is deliberately no separate `save_agent_findings` / `mark_processed`
+pair to call in the wrong order. Agent findings go to their own `agent_findings` table, never to
+`validation_issues`. · **Status:** accepted · **Why:** the plan's `get_noted_records(batch_date)`
+accepted a `batch_date` its body never used — an accepted-and-ignored parameter, the same shape of
+silent drift as the Task-4 loader that took routing data and dropped it. Three ways to scope the
+batch were considered: (a) infer "unprocessed" from *absence of findings* — but a record the agents
+**clear** writes zero findings, so it would be re-read and re-paid-for on every future run, forever;
+(b) filter on `run_at`'s date — semantically real, but a demo footgun (load fixtures Monday, run the
+batch Tuesday, get a silently empty worklist and no error); (c) an explicit marker — chosen. A record
+is in the inbox because we have *not looked at it*, which is a fact about our processing, not a fact
+we can derive from the data. Adding a `batch_date` column to `validation_runs` was rejected as
+redundant: `run_at` already holds that date, and two copies of one fact can disagree. · **Consequences:**
+the two-call shape (`save_findings` then `mark_processed`) has two silent failure modes and both are
+now unreachable by construction: die between the calls and the record is re-read next run and its
+findings written a **second** time (the worklist and the SQL analytics double-count); stamp first and
+fail the write and the record leaves the inbox **forever** with its defects unreported. One
+transaction, so neither is possible — `test_findings_and_marker_commit_together` pins the rollback.
+A cleared record is recorded as `record_agent_result(run_id, [], batch_date)` — zero findings, still
+stamped. An unknown `run_id` raises rather than silently stamping nothing. `WORKLIST_DOMAIN_ORDER`
+must list **every** domain `router.py` emits (`admin` was missing): an unlisted domain sorts silently
+to the bottom of the worklist — the Task-3 labs skew again, invisible until someone reads the
+analytics. `get_worklist` orders by `finding_id` so findings tied on (domain, severity) don't
+reshuffle between identical runs. Schema change ⇒ DB reset: `python load_results.py --fixtures` (run
+2026-07-13). Note the batch inbox is **empty until Task 11** — no current fixture carries a
+`clinical_note`; Task 11 adds them. · **Refs:** `app/store.py` (`agent_findings`,
+`agent_processed_at`, `record_agent_result`, `get_noted_records`, `get_worklist`,
+`WORKLIST_DOMAIN_ORDER`), `tests/test_store_findings.py`, plan Task 5 (deviates: no `batch_date` on
+`get_noted_records`; `save_agent_findings` + `mark_processed` collapsed into `record_agent_result`).

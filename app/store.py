@@ -47,6 +47,11 @@ validation_runs = Table(
     Column("routing_reason",  Text),     # which field(s) triggered escalation
     Column("llm_summary",     Text),     # plain-English summary from LLM (escalated records only)
     Column("payload_json",    Text),     # raw record JSON, for the nightly agent batch
+    # Stamped by the nightly agent batch once a record has been looked at — whether
+    # or not it produced findings. A cleared record writes no findings, so absence of
+    # findings cannot mean "not yet processed"; without this the batch would re-run
+    # every clean record (and re-spend credits) forever.
+    Column("agent_processed_at", String),
 )
 
 validation_issues = Table(
@@ -58,6 +63,40 @@ validation_issues = Table(
     Column("severity",    String,  nullable=False),
     Column("remediation", Text),
 )
+
+# Findings from the LLM agents live HERE, never in validation_issues. Keeping the two
+# engines' output in separate tables is the presentation argument: at demo time we can
+# show exactly which defects the deterministic rules caught and which only the agents did.
+agent_findings = Table(
+    "agent_findings", metadata,
+    Column("finding_id",   Integer, primary_key=True, autoincrement=True),
+    Column("run_id",       Integer, nullable=False),
+    Column("batch_date",   String,  nullable=False),
+    Column("created_at",   String,  nullable=False),
+    Column("domain",       String,  nullable=False),
+    Column("field",        String,  nullable=False),
+    Column("problem",      Text,    nullable=False),
+    Column("severity",     String,  nullable=False),
+    Column("adjudication", String),
+    Column("evidence",     Text),
+    Column("confidence",   String),
+    Column("remediation",  Text),
+    Column("owner",        String),
+)
+
+# Worklist precedence. Deliberately separate from router.DOMAIN_PRIORITY: that one picks
+# a record's primary domain, this one sorts a human's queue.
+# Every domain router.py can emit must appear here. A domain missing from this map sorts
+# silently to the bottom of the worklist, which is how the labs defects ended up misfiled
+# under `admin` in Task 3 — the skew is invisible until someone reads the analytics.
+# ("clean" is deliberately absent: a *finding* is never clean. It falls to UNRANKED.)
+WORKLIST_DOMAIN_ORDER = {"identity": 0, "clinical": 1, "billing": 2, "admin": 3}
+WORKLIST_SEVERITY_ORDER = {"critical": 0, "warning": 1, "info": 2}
+UNRANKED = 9  # unrecognised domain/severity: sorts last rather than crashing the worklist
+
+
+def _utc_now():
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def init_db():
@@ -86,7 +125,7 @@ def _insert_report(conn, report, model, source_system, routing=None, payload=Non
             issue_count=report["issue_count"],
             model=model,
             source_system=source_system,
-            run_at=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            run_at=_utc_now(),
             routing_domain=routing.get("domain"),
             escalated=1 if routing.get("escalated") else 0,
             routing_reason=routing.get("reason"),
@@ -125,6 +164,91 @@ def save_reports_bulk(items, model):
         for report, source_system, routing, payload in items:
             _insert_report(conn, report, model, source_system, routing, payload)
     return len(items)
+
+
+def record_agent_result(run_id, findings, batch_date):
+    """Record what the agent batch made of one record: write its findings AND stamp it
+    processed, in ONE transaction. Returns the number of findings written.
+
+    This is the only way to write agent findings, on purpose. Writing the findings and
+    stamping the marker as two separate calls has two silent failure modes: die between
+    them and the record is re-read next run and its findings written a second time (the
+    worklist double-counts), or stamp first and fail the write and the record leaves the
+    inbox forever with its defects unreported. One transaction, so neither is reachable.
+
+    Pass findings=[] for a record the agents CLEARED — it still gets stamped, so we don't
+    re-read (and re-pay for) a clean record on every future run.
+    """
+    now = _utc_now()
+    with engine.begin() as conn:
+        for f in findings:
+            conn.execute(
+                agent_findings.insert().values(
+                    run_id=run_id,
+                    batch_date=batch_date,
+                    created_at=now,
+                    domain=f["domain"],
+                    field=f["field"],
+                    problem=f["problem"],
+                    severity=f["severity"],
+                    adjudication=f.get("adjudication"),
+                    evidence=f.get("evidence"),
+                    confidence=f.get("confidence"),
+                    remediation=f.get("remediation"),
+                    owner=f.get("owner"),
+                )
+            )
+        stamped = conn.execute(
+            validation_runs.update()
+            .where(validation_runs.c.run_id == run_id)
+            .values(agent_processed_at=now)
+        ).rowcount
+    if stamped == 0:
+        raise ValueError(
+            f"run_id {run_id} does not exist — findings would be orphaned and the record "
+            f"never marked processed"
+        )
+    return len(findings)
+
+
+def get_noted_records():
+    """The nightly agent batch's inbox: records carrying a clinical note that the batch
+    has not processed yet. Returns [{"run_id": int, "payload": dict}].
+
+    Selection is on NOTE PRESENCE, not on escalated/critical — a record the rules find
+    nothing wrong with must still reach the agents. That zero-rule-issue record is the
+    catch the whole demo turns on."""
+    out = []
+    with engine.connect() as conn:
+        rows = conn.execute(text(
+            "SELECT run_id, payload_json FROM validation_runs "
+            "WHERE payload_json IS NOT NULL AND agent_processed_at IS NULL "
+            "ORDER BY run_id"
+        )).mappings()
+        for row in rows:
+            payload = json.loads(row["payload_json"])
+            # A payload that isn't a JSON object has no note and no fields to adjudicate.
+            # Skip it rather than let one malformed row take down the whole batch.
+            if not isinstance(payload, dict):
+                continue
+            if (payload.get("clinical_note") or "").strip():
+                out.append({"run_id": row["run_id"], "payload": payload})
+    return out
+
+
+def get_worklist(batch_date):
+    """Findings for one batch, sorted domain-precedence then severity.
+    ORDER BY finding_id gives ties a defined order (insertion order) — without it SQLite
+    is free to return tied findings in any order and the human worklist reshuffles between
+    identical runs."""
+    with engine.connect() as conn:
+        rows = [dict(r) for r in conn.execute(text(
+            "SELECT * FROM agent_findings WHERE batch_date = :d ORDER BY finding_id"),
+            {"d": batch_date}
+        ).mappings()]
+    rows.sort(key=lambda f: (WORKLIST_DOMAIN_ORDER.get(f["domain"], UNRANKED),
+                             WORKLIST_SEVERITY_ORDER.get(f["severity"], UNRANKED)))
+    return rows
 
 
 def get_stats():

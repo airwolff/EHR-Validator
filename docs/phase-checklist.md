@@ -28,8 +28,14 @@ Live tracker for the current phase. Tick a box only when **verified by running i
         inspected. Also fixed `load_results.py`, which never routed — every row had
         `routing_domain = NULL`, so `/stats` + the domain analytics were empty. Both writers
         (`/validate` and the loader) now persist routing + payload. See `docs/decisions.md`.*
-  - [ ] Tasks 5–12: see `docs/superpowers/plans/2026-07-09-multi-agent-triage.md`
-        (Task 5 starts the Lyzr/agent layer)
+  - [x] Task 5: `agent_findings` table + noted-records/worklist queries — *verified 2026-07-13:
+        41 passed; DB reset + fixtures reloaded (new `agent_processed_at` column). Deviates from
+        the plan: `get_noted_records()` takes no `batch_date` (the plan's body ignored it); findings
+        + processed-marker are written in ONE transaction via `record_agent_result` so the batch
+        cannot lose or double-count findings. Inbox is **empty until Task 11** — no fixture carries
+        a `clinical_note` yet. See `docs/decisions.md`.*
+  - [ ] Tasks 6–12: see `docs/superpowers/plans/2026-07-09-multi-agent-triage.md`
+        (Task 6 = finding schema + verbatim-evidence guard)
 - [ ] **LLM escalation** — escalated records only → Lyzr → plain-English summary + cross-field
       contradiction detection (NOT re-validation). Test on fixtures only (credit budget)
 - [ ] **Postgres swap + Render deploy** — same SQLAlchemy Core code, switch DB URL (gated by OQ#3)
