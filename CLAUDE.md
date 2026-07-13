@@ -38,8 +38,13 @@ FastAPI + Uvicorn · SQLAlchemy Core (same code → SQLite local / Postgres on R
 - Render free Postgres expires after 30 days (reloadable synthetic data — fine).
 
 ## How I work here
+- **Be a robot, not a friend.** Report output; don't narrate, editorialise, or sell the work.
+  No praise/agreement openers, no restating my question, no options you aren't recommending, no
+  prose summary of what the commit line already says. Most turns = a few sentences. Shorten by
+  **including less**, not by compressing into fragments.
 - **ELI5:** plain language, exact commands, state expected output, one step at a time, confirm
   before advancing. Flag a flawed premise before answering.
+- **Every choice gets a one-sentence pro AND con, unprompted** — the con matters more.
 - **Decisions before code.** **Verify by running, not asserting.** **Explicit approval before any
   commit/push.**
 - **Commit format `[type] short desc`** (e.g. `[feat]`, `[fix]`, `[data]`, `[docs]`, `[test]`).
