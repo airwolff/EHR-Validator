@@ -256,3 +256,33 @@ the worklist — which is precisely why the output is a worklist and not an auto
 presentation material (see `docs/for-review.md`), not embarrassments. · **Refs:** `app/agents/schema.py`,
 `tests/test_agents_schema.py`, plan Task 6 (deviates: `partition_findings`, value validation,
 `MIN_EVIDENCE_CHARS`, Unicode fold, and the guard's honest name).
+
+## 2026-07-13 — the credit ledger fails closed, buckets by month, and holds a lock
+
+**Decision:** `app/agents/ledger.py` caps live Lyzr calls against a **per-calendar-month** budget
+(`{"months": {"2026-07": 12}}`), read from `LYZR_CREDIT_BUDGET` with a **free-tier-safe default of
+15**. Four deviations from plan Task 7: (1) monthly buckets, not a lifetime counter; (2) budget from
+the environment, not a hardcoded argument; (3) writes are atomic (temp file + `os.replace`, file and
+directory both fsynced) and the whole read-modify-write is held under an `fcntl.flock`; (4) an
+unreadable or non-integer ledger raises **`LedgerCorrupt`** rather than being read as zero. ·
+**Status:** accepted · **Why:** **a lifetime counter goes out of sync with the vendor** — Lyzr's
+allowance resets monthly, so a cumulative cap eventually blocks a fresh billing month while Lyzr is
+happily serving; buckets also preserve "we made N live calls in July", which is the spend record.
+**The default is 15, not the paid allowance (2,000) or a fraction of it, on purpose:** if the $19/mo
+Starter subscription lapses, the number that is already in force is survivable on the 20-credit free
+tier, and nobody has to remember to lower it. **Failing closed is the ledger's whole job** — this is
+the only gate in front of real money, and a ledger that swallows a parse error and reports "0 spent"
+hands the entire budget back on every corrupt read, silently, while being trusted. That is worse than
+having no ledger. · **Consequences:** three of these came out of `/code-review` and one was proven by
+a test that *failed before the fix*: **`spend()` is a read-modify-write, so without the lock two
+processes both read 14/15, both decide there is room, and both write 15 — two credits spent, one
+recorded.** The concurrency test reds without `flock`. Also pinned: **`spend(1.5)` used to pass the
+`n < 1` guard, write `1.5` to disk, and brick the ledger** — every subsequent read would raise
+`LedgerCorrupt` and lock out all live calls until a human hand-edited the file; and **an unvalidated
+`month` key silently doubled the cap** (`"2026-7"` writes a different bucket than `current_month()`
+reads, each with a full fresh budget). The ledger file is **gitignored under both names**
+(`.lyzr_ledger.json`, the `LYZR_LEDGER_PATH` default, and `ledger.json`): it is machine state, and a
+committed copy would let a stale checkout resurrect an old spend count. **`fcntl` is POSIX-only** —
+fine on macOS and Render, would need revisiting on Windows. · **Refs:** `app/agents/ledger.py`,
+`tests/test_agents_ledger.py`, plan Task 7 (deviates: monthly buckets, env budget, atomic write +
+lock, explicit fail-closed).

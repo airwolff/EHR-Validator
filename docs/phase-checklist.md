@@ -43,9 +43,17 @@ Live tracker for the current phase. Tick a box only when **verified by running i
         otherwise read as a hallucination and **inflate the headline number**). Two limits pinned by
         `test_LIMIT_*`: it is **not** an injection defence, and verbatim ≠ faithful. See
         `docs/decisions.md` + `docs/for-review.md`.*
-  - [ ] Tasks 7–12: see `docs/superpowers/plans/2026-07-09-multi-agent-triage.md`
-        (Task 7 = credit ledger). **Only Task 12 makes a live Lyzr call** — Tasks 7–11 run against
-        recorded responses and cost nothing.
+  - [x] Task 7: credit ledger — *verified 2026-07-13: 82 passed; refusal, persistence-across-
+        processes and fail-closed-on-corrupt all demonstrated outside pytest. Deviates from the plan:
+        **per-month buckets** (Lyzr's allowance resets monthly; a lifetime counter would block a
+        fresh billing month), budget from **`LYZR_CREDIT_BUDGET`** defaulting to **15** (survivable
+        on the free tier, so cancelling Starter needs no code change), atomic write + **`fcntl.flock`
+        across the read-modify-write** (a race let two spenders past the cap — the test reds without
+        the lock), and an unreadable ledger raises **`LedgerCorrupt`** instead of reading as 0 spent.
+        Ledger file gitignored under both names. See `docs/decisions.md`.*
+  - [ ] Tasks 8–12: see `docs/superpowers/plans/2026-07-09-multi-agent-triage.md`
+        (Task 8 = record/replay + live client seam). **Only Task 12 makes a live Lyzr call** —
+        Tasks 8–11 run against recorded responses and cost nothing.
   - [ ] **Task 13 (new, 2026-07-13): rules-vs-LLM comparison, N runs.** Run the LLM over the same
         fixtures the rules ran over, N times, and report the miss rate ("the agent missed the
         SpO2=105 critical in X of N runs"). This is the thesis-as-evidence slide, and it is what the
