@@ -99,3 +99,22 @@ payloads exist in two places; the tracked copies are golden files and may intent
 silently. Also required anchoring the ignore pattern to `/payloads/`: unanchored `payloads/` matches
 at *any* depth and was silently ignoring `tests/fixtures/payloads/` too. · **Refs:** `.gitignore`,
 `tests/conftest.py`, plan `docs/superpowers/plans/2026-07-09-multi-agent-triage.md` (Tasks 1, 11).
+
+## 2026-07-13 — Enforce the written rules with hooks + a handoff skill
+**Decision:** Adopt `.claude/` infra (tracked, shared): a `handoff` skill, a pytest/secret
+pre-commit gate, an append-only + invariants guard, and an auto-running start-of-session staleness
+check. Ported from the sibling repos (`railyard`, `obp/website`, `duly_noted`). · **Status:**
+accepted · **Why:** the rules in CLAUDE.md and `session-protocol.md` were prose that a session had
+to *remember* to follow, and the 2026-07-11 handoff proved that fails — it went stale and still
+listed an already-landed commit as the next step. Now: `git commit` is blocked if pytest is red or a
+secret is staged (making "verify by running, not asserting" mechanical — nothing can silently weaken
+the temp-71.2 guard); `decisions.md` rejects any edit that removes existing text (append-only was
+previously unenforced); `db/queries.sql` rejects lowercase SQL; and the staleness check runs on
+every session start instead of when someone remembers. · **Consequences:** commits get slower by the
+runtime of the suite (currently ~0.01s). A hook that crashes must fail *open* deliberately, not via
+`set -e` — a non-2 exit is a soft error in Claude Code, so a crashing guard silently stops guarding.
+Deliberately did **not** port `duly_noted`'s `post-edit-format.sh`: it auto-prettiers `*.md`/`*.json`
+and would reformat `db/queries.sql`, which this project forbids — a hook can be actively harmful
+when copied across repos with different rules. The siblings' "do not commit the handoff" rule is
+also inverted here, because overwrite-plus-git-history *is* our handoff history. · **Refs:**
+`.claude/settings.json`, `.claude/hooks/*.sh`, `.claude/skills/handoff/SKILL.md`.

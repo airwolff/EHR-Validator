@@ -49,6 +49,13 @@ FastAPI + Uvicorn · SQLAlchemy Core (same code → SQLite local / Postgres on R
 - **Code review before merge:** run `/code-review` (or request review) on a finished branch.
 - **Blocker Rule:** don't guess — stub, mark `# BLOCKED`, log in open-questions.md, report.
 
+## Enforced automatically (don't rely on memory — `.claude/`)
+- **`/handoff` skill** — runs the end-of-session ritual and rewrites `docs/handoff.md`.
+- **Pre-commit gate** — `git commit`/`push` is **blocked** if pytest is red or a secret is staged.
+- **Invariants guard** — `docs/decisions.md` rejects edits that remove text (append-only);
+  `db/queries.sql` rejects lowercase SQL.
+- **Session start** — the handoff staleness check runs automatically and flags a drifted handoff.
+
 ## Docs (start-here order)
 0. `docs/session-protocol.md` — the start/end-of-session ritual + which doc holds what (read once).
 1. `docs/phase-checklist.md` — what to work on now (source of truth for scope).
