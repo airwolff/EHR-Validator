@@ -1,0 +1,48 @@
+{
+  "encounter": {
+    "encounter_id": "E-WOW-01",
+    "encounter_date": "2024-06-15",
+    "encounter_type": "outpatient",
+    "facility_npi": "1234567890",
+    "provider_npi": "0987654321"
+  },
+  "patient": {
+    "patient_id": "PT-104200",
+    "first_name": "Jane",
+    "last_name": "Okafor",
+    "dob": "1990-03-11",
+    "age": 34,
+    "sex": "F",
+    "zip": "60614"
+  },
+  "vitals": {
+    "height_in": 66,
+    "weight_lbs": 142,
+    "systolic_bp": 118,
+    "diastolic_bp": 76,
+    "heart_rate_bpm": 72,
+    "temp_f": 98.6,
+    "spo2_pct": 99
+  },
+  "diagnoses": [
+    {
+      "code": "I10",
+      "description": "Essential (primary) hypertension",
+      "code_system": "ICD-10-CM"
+    }
+  ],
+  "procedures": [
+    {
+      "code": "99213",
+      "description": "Office visit, established patient",
+      "code_system": "CPT"
+    }
+  ],
+  "labs": [],
+  "metadata": {
+    "source_system": "Epic",
+    "extract_timestamp": "2024-06-15T14:02:11Z",
+    "schema_version": "2.1"
+  },
+  "clinical_note": "62-year-old gentleman with a history of hypertension presents for routine follow-up. Blood pressure well controlled today, no dizziness or headache. Plan: continue lisinopril 10 mg daily, follow up in 6 months."
+}

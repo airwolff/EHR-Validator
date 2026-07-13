@@ -1,0 +1,55 @@
+{
+  "encounter": {
+    "encounter_id": "E-CLEAN-01",
+    "encounter_date": "2024-06-15",
+    "encounter_type": "outpatient",
+    "facility_npi": "1234567890",
+    "provider_npi": "0987654321"
+  },
+  "patient": {
+    "patient_id": "PT-200100",
+    "first_name": "Maria",
+    "last_name": "Delgado",
+    "dob": "1985-05-22",
+    "age": 39,
+    "sex": "F",
+    "zip": "73301"
+  },
+  "vitals": {
+    "height_in": 64,
+    "weight_lbs": 155,
+    "systolic_bp": 122,
+    "diastolic_bp": 78,
+    "heart_rate_bpm": 70,
+    "temp_f": 98.4,
+    "spo2_pct": 98
+  },
+  "diagnoses": [
+    {
+      "code": "E11.9",
+      "description": "Type 2 diabetes mellitus without complications",
+      "code_system": "ICD-10-CM"
+    }
+  ],
+  "procedures": [
+    {
+      "code": "99213",
+      "description": "Office visit, established patient",
+      "code_system": "CPT"
+    }
+  ],
+  "labs": [
+    {
+      "test": "A1c",
+      "value": 6.9,
+      "ordered": true,
+      "resulted": true
+    }
+  ],
+  "metadata": {
+    "source_system": "Epic",
+    "extract_timestamp": "2024-06-15T09:15:00Z",
+    "schema_version": "2.1"
+  },
+  "clinical_note": "39-year-old woman with type 2 diabetes, here for routine follow-up. Reports good adherence, no hypoglycemic episodes. A1c today 6.9, stable from prior. Continue metformin 1000 mg twice daily, recheck A1c in 6 months."
+}
