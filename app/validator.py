@@ -36,7 +36,8 @@ REQUIRED = [
     ("encounter", "provider_npi"),
     ("patient", "patient_id"),
     ("patient", "dob"),
-    ("patient", "sex"),
+    # patient.sex is deliberately NOT required — declining to state sex is a
+    # legitimate answer, not a data defect. See SEX_UNDECLARED below.
 ]
 
 # vital: (pass_lo, pass_hi, warn_lo, warn_hi)
@@ -49,6 +50,40 @@ VITALS = {
     "temp_f": (95, 104, 93, 107),
     "spo2_pct": (90, 100, 70, 100),
 }
+
+
+# Minimal hand-picked sex-restricted ICD-10 prefixes. Detection is deterministic;
+# the agent only adjudicates which field (sex vs code) is the real error.
+SEX_RESTRICTED_CODES = {
+    "female_only": ("O", "Z34", "Z33", "N80", "C53"),   # pregnancy, cervix, endometriosis
+    "male_only":   ("N40", "C61", "N41"),               # BPH, prostate
+}
+
+# Spellings that resolve to a definite sex, per FHIR AdministrativeGender.
+SEX_SYNONYMS = {
+    "M": "M", "MALE": "M",
+    "F": "F", "FEMALE": "F",
+}
+
+# Answers that decline to state a sex. These are VALID values, not defects: a
+# patient may always opt out, and the pipeline must never penalise that. They
+# produce no issue at any severity, and they suppress the sex-restricted-code
+# rule below — with no asserted sex there is nothing for a code to contradict.
+SEX_UNDECLARED = {
+    "", "U", "UN", "UNK", "UNKNOWN", "O", "OTHER", "X", "ASKU",
+    "DECLINED", "DECLINED TO STATE", "PREFER NOT TO SAY", "NOT RECORDED",
+}
+
+
+def _normalise_sex(raw):
+    """Resolve a raw sex value to 'M', 'F', None (undeclared), or the cleaned
+    string itself when it maps to nothing we recognise."""
+    if raw is None:
+        return None
+    cleaned = str(raw).strip().upper()
+    if cleaned in SEX_UNDECLARED:
+        return None
+    return SEX_SYNONYMS.get(cleaned, cleaned)
 
 
 def _issue(field, problem, severity, remediation):
@@ -141,6 +176,32 @@ class LocalValidator:
                 issues.append(_issue(f"procedures[{idx}].code_system",
                                      f"code_system '{pr.get('code_system')}' is not exact 'CPT'.",
                                      "info", "Set code_system to exact uppercase 'CPT'."))
+
+        # 6. sex-restricted diagnosis codes (deterministic detection)
+        #
+        # Fires ONLY on a definitely-stated M or F. An undeclared sex ("prefer not
+        # to say", unknown, other, absent) yields sex=None and the rule stays
+        # silent: there is no asserted sex for the code to contradict, so there is
+        # no defect. Opting out must never cost the patient an issue.
+        sex = _normalise_sex(pat.get("sex"))
+
+        if sex is not None and sex not in ("M", "F"):
+            # A value we can't map. This is an encoding defect in the source
+            # system, not a problem with the patient — hence info, and the
+            # remediation points at the integration.
+            issues.append(_issue("patient.sex",
+                f"Sex '{pat.get('sex')}' is not a recognised FHIR AdministrativeGender value.",
+                "info", "Map the source value to male/female/other/unknown at ingest."))
+        elif sex in ("M", "F"):
+            restricted = "female_only" if sex == "M" else "male_only"
+            other_sex = "female" if sex == "M" else "male"
+            for dx in payload.get("diagnoses", []):
+                code = str(dx.get("code", "")).strip().upper()
+                if code.startswith(SEX_RESTRICTED_CODES[restricted]):
+                    issues.append(_issue("patient.sex",
+                        f"Diagnosis {code} is {other_sex}-restricted but patient.sex is '{sex}'.",
+                        "critical", "Reconcile patient sex vs diagnosis; one is a data error."))
+                    break   # one contradiction per record; don't repeat the same defect
 
         return {
             "payload_id": enc.get("encounter_id") or "UNKNOWN",

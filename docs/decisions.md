@@ -118,3 +118,30 @@ and would reformat `db/queries.sql`, which this project forbids — a hook can b
 when copied across repos with different rules. The siblings' "do not commit the handoff" rule is
 also inverted here, because overwrite-plus-git-history *is* our handoff history. · **Refs:**
 `.claude/settings.json`, `.claude/hooks/*.sh`, `.claude/skills/handoff/SKILL.md`.
+
+## 2026-07-13 — patient.sex is optional; declining to state sex is a clean value
+**Decision:** Remove `patient.sex` from `REQUIRED` in `LocalValidator`. An undeclared sex — absent,
+empty, `unknown`, `other`, or an explicit **"prefer not to say"** — produces **no issue at any
+severity**, and it *suppresses* the sex-restricted-code rule entirely. The rule fires only on a
+definitely-stated `M`/`F`, after normalisation (`"m"`, `"male"`, `" M "` → `M`). A value we cannot
+map at all (e.g. `"42"`) is `info`, with the remediation aimed at the ingest mapping rather than the
+patient. · **Status:** accepted · **Why:** two reasons, one ethical and one about correctness.
+(1) A patient must be able to opt out of stating sex without the pipeline recording a defect against
+their record. Previously `sex` was in `REQUIRED`, so declining to answer scored **`critical` —
+"Required field is missing or empty"** — the exact same severity as `SpO2 = 105`. The system was
+calling a legitimate human answer a near-certain data-entry error. Modelling against FHIR
+`AdministrativeGender` (`male | female | other | unknown`, plus asked-but-declined as a distinct
+data-absent reason) is both the humane choice and the standards-correct one. (2) With no asserted
+sex there is nothing for a sex-restricted diagnosis code to contradict, so firing the rule would be
+asserting a contradiction we cannot actually derive. Silence is the correct output, not a guess.
+· **Consequences:** the original Task-2 code from the plan compared `sex == "M"` against a `.upper()`ed
+diagnosis code — an asymmetry that made a `"sex": "m"` record with a pregnancy code come back
+`status: pass`, `issue_count: 0`, `domain: clean`, **not escalated**. A silent false negative in the
+engine the whole presentation argues is the *trustworthy* one; caught by `/code-review`, fixed here,
+and now pinned by tests. Severity choices follow the CLAUDE.md ladder (severity = plausibility of the
+datum): an unmappable sex string is a plausible value that is merely poorly encoded, so `info` — the
+same shape as the existing wrong-case `code_system` rule. Note a pre-existing quirk this makes more
+visible: **any** issue, including an `info`, sets `status: "fail"`, so an unmappable sex reads as a
+failed record. Left as-is; revisit if it muddies the demo. · **Refs:** `app/validator.py`
+(`SEX_UNDECLARED`, `SEX_SYNONYMS`, `_normalise_sex`, section 6), `tests/test_validator_sex_codes.py`,
+plan Task 2.
