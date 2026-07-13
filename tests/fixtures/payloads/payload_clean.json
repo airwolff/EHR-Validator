@@ -1,0 +1,51 @@
+{
+  "encounter": {
+    "encounter_id": "ENC-20240615-00412",
+    "encounter_date": "2024-06-15",
+    "encounter_type": "outpatient",
+    "facility_npi": "1234567890",
+    "provider_npi": "0987654321"
+  },
+  "patient": {
+    "patient_id": "PT-884421",
+    "first_name": "Maria",
+    "last_name": "Santos",
+    "dob": "1978-03-22",
+    "age": 46,
+    "sex": "F",
+    "zip": "04841"
+  },
+  "vitals": {
+    "height_in": 65,
+    "weight_lbs": 148,
+    "systolic_bp": 118,
+    "diastolic_bp": 76,
+    "heart_rate_bpm": 72,
+    "temp_f": 98.6,
+    "spo2_pct": 98
+  },
+  "diagnoses": [
+    {
+      "code": "J06.9",
+      "description": "Acute URI, unspecified",
+      "code_system": "ICD-10-CM"
+    },
+    {
+      "code": "Z23",
+      "description": "Encounter for immunization",
+      "code_system": "ICD-10-CM"
+    }
+  ],
+  "procedures": [
+    {
+      "code": "99213",
+      "description": "Office visit, established patient",
+      "code_system": "CPT"
+    }
+  ],
+  "metadata": {
+    "source_system": "Epic",
+    "extract_timestamp": "2024-06-15T18:32:00Z",
+    "schema_version": "2.1"
+  }
+}

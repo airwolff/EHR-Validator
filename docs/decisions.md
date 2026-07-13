@@ -81,3 +81,21 @@ trusting them*. Sessions span days here, so stale handoffs are a real risk. · *
 more doc to keep current each session; in exchange, a fresh session can reconstruct state reliably.
 The memory/`decisions.md`/`handoff.md` boundary is now written down so nothing gets duplicated. ·
 **Refs:** `docs/session-protocol.md`, `docs/handoff.md`.
+
+## 2026-07-13 — Test fixtures are tracked under `tests/fixtures/payloads/`
+**Decision:** The test suite reads payloads from `tests/fixtures/payloads/` (committed to git), not
+from the repo-root `payloads/` dir. The 5 canonical fixtures are copied there; the 2 demo payloads
+added in plan Task 11 go there too. `/payloads/` stays gitignored as pure generator output. This
+resolves the implementation plan's one open item (Task 11 note, line 1209). · **Status:** accepted ·
+**Why:** `payloads/` is fully gitignored and *nothing in it was ever tracked*, so the plan's original
+`conftest.py` (reading `../payloads`) would make `pytest` die with `FileNotFoundError` on any fresh
+clone — the test suite is portfolio evidence a mentor or recruiter is meant to clone and run, so it
+must be green with no generation step. Rejected auto-generating in `conftest` (a generator bug would
+then masquerade as a test failure, and a regression guard must pin behavior against a *frozen* file,
+not a regenerated one). Rejected `!payloads/*.json` un-ignore negations (a half-tracked/half-ignored
+dir is how a file you meant to keep out eventually leaks). · **Consequences:** the 5 canonical
+payloads exist in two places; the tracked copies are golden files and may intentionally drift from
+`generate_payloads.py` — if the generator changes, the golden copies are updated deliberately, not
+silently. Also required anchoring the ignore pattern to `/payloads/`: unanchored `payloads/` matches
+at *any* depth and was silently ignoring `tests/fixtures/payloads/` too. · **Refs:** `.gitignore`,
+`tests/conftest.py`, plan `docs/superpowers/plans/2026-07-09-multi-agent-triage.md` (Tasks 1, 11).

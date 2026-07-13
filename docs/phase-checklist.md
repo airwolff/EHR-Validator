@@ -14,6 +14,10 @@ Live tracker for the current phase. Tick a box only when **verified by running i
 ## Remaining (build order)
 - [ ] **Test suite** — pytest over the 5 fixtures pinning validator output; include a regression
       guard on the temp-71.2°F critical (protect the demo finding). *(merged practice — new)*
+  - [x] Task 1: pytest harness + temp-71.2 regression guard — *verified 2026-07-13: 2 passed; guard
+        proven to bite (widening the temp hard-bound flips critical→warning and reds the test).
+        Fixtures tracked at `tests/fixtures/payloads/` so a fresh clone runs green.*
+  - [ ] Tasks 2–12: see `docs/superpowers/plans/2026-07-09-multi-agent-triage.md`
 - [ ] **LLM escalation** — escalated records only → Lyzr → plain-English summary + cross-field
       contradiction detection (NOT re-validation). Test on fixtures only (credit budget)
 - [ ] **Postgres swap + Render deploy** — same SQLAlchemy Core code, switch DB URL (gated by OQ#3)
