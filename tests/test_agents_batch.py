@@ -18,7 +18,6 @@ What these tests are really guarding:
   that name a record that wasn't in the batch, are the evidence the presentation rests on. A
   silent drop is a lost argument.
 """
-import importlib
 import json
 
 import pytest
@@ -26,6 +25,7 @@ import pytest
 from app.agents.batch import BatchAborted, run_nightly_batch
 from app.agents.specialists import SPECIALISTS, build_message
 from app.agents.transport import record_response
+from tests.conftest import record_reply
 
 NOTE = "62-year-old gentleman with history of BPH, here for follow-up. Afebrile, comfortable."
 
@@ -54,14 +54,6 @@ HALLUCINATED = {
 }
 
 
-def fresh_store(tmp_path, monkeypatch):
-    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path / 'batch.db'}")
-    import app.store as store
-    importlib.reload(store)
-    store.init_db()
-    return store
-
-
 def save_noted_record(store, payload=None):
     payload = payload or PAYLOAD
     return store.save_report(
@@ -70,27 +62,20 @@ def save_noted_record(store, payload=None):
         model="local", payload=payload)
 
 
-def record_reply(recordings, store_records, specialist_name, findings):
-    """Record what `specialist_name` would say about exactly these records."""
-    message = build_message(SPECIALISTS[specialist_name], store_records)
-    record_response(recordings, specialist_name, message, json.dumps({"findings": findings}))
-
-
-def setup_batch(tmp_path, monkeypatch, identity=(), clinical=(), payload=None):
-    """A store with one noted record, and a recorded reply from each specialist."""
-    store = fresh_store(tmp_path, monkeypatch)
+def setup_batch(store, tmp_path, identity=(), clinical=(), payload=None):
+    """One noted record in the store, and a recorded reply from each specialist."""
     run_id = save_noted_record(store, payload)
     records = store.get_noted_records()
     recordings = str(tmp_path / "recordings")
     record_reply(recordings, records, "identity", list(identity))
     record_reply(recordings, records, "clinical", list(clinical))
-    return store, run_id, recordings
+    return run_id, recordings
 
 
 # --- the happy path, and the guard doing its job --------------------------------------
 
-def test_a_grounded_finding_reaches_the_worklist(tmp_path, monkeypatch):
-    store, run_id, recordings = setup_batch(tmp_path, monkeypatch, identity=[GROUNDED])
+def test_a_grounded_finding_reaches_the_worklist(fresh_store, tmp_path):
+    run_id, recordings = setup_batch(fresh_store, tmp_path, identity=[GROUNDED])
 
     result = run_nightly_batch("2026-07-13", mode="replay", recordings_dir=recordings)
 
@@ -101,10 +86,10 @@ def test_a_grounded_finding_reaches_the_worklist(tmp_path, monkeypatch):
     assert finding["severity"] == "critical"
 
 
-def test_a_fabricated_finding_is_dropped_and_counted(tmp_path, monkeypatch):
+def test_a_fabricated_finding_is_dropped_and_counted(fresh_store, tmp_path):
     """The whole argument: the model cited text the chart never contained. It must not reach
     the worklist, and it must not vanish quietly either — the drop rate IS the evidence."""
-    store, _, recordings = setup_batch(tmp_path, monkeypatch, clinical=[HALLUCINATED])
+    _, recordings = setup_batch(fresh_store, tmp_path, clinical=[HALLUCINATED])
 
     result = run_nightly_batch("2026-07-13", mode="replay", recordings_dir=recordings)
 
@@ -117,12 +102,12 @@ def test_a_fabricated_finding_is_dropped_and_counted(tmp_path, monkeypatch):
 
 
 def test_a_finding_about_a_record_that_was_not_in_the_batch_is_dropped_and_counted(
-    tmp_path, monkeypatch
+    fresh_store, tmp_path
 ):
     """Models invent record ids. A finding we cannot attribute must not be guessed onto some
     other patient — and it is not a hallucinated QUOTE, so it needs its own tally."""
     invented = {**GROUNDED, "record_id": "E-DOES-NOT-EXIST"}
-    store, _, recordings = setup_batch(tmp_path, monkeypatch, identity=[invented])
+    _, recordings = setup_batch(fresh_store, tmp_path, identity=[invented])
 
     result = run_nightly_batch("2026-07-13", mode="replay", recordings_dir=recordings)
 
@@ -131,11 +116,11 @@ def test_a_finding_about_a_record_that_was_not_in_the_batch_is_dropped_and_count
     assert result["dropped"][0]["reasons"] == ["unknown_record_id"]
 
 
-def test_the_specialist_decides_the_domain_and_owner_not_the_model(tmp_path, monkeypatch):
+def test_the_specialist_decides_the_domain_and_owner_not_the_model(fresh_store, tmp_path):
     """We overwrite domain with the specialist's own name, so penalising the model for a bad
     domain would be penalising it on a field we throw away. Stamp first, then judge."""
     confused = {**GROUNDED, "domain": "billing", "owner": ""}
-    store, _, recordings = setup_batch(tmp_path, monkeypatch, identity=[confused])
+    _, recordings = setup_batch(fresh_store, tmp_path, identity=[confused])
 
     result = run_nightly_batch("2026-07-13", mode="replay", recordings_dir=recordings)
 
@@ -147,19 +132,19 @@ def test_the_specialist_decides_the_domain_and_owner_not_the_model(tmp_path, mon
 
 # --- the inbox: processed exactly once ------------------------------------------------
 
-def test_a_cleared_record_is_still_marked_reviewed(tmp_path, monkeypatch):
+def test_a_cleared_record_is_still_marked_reviewed(fresh_store, tmp_path):
     """Both agents found nothing. That is an ANSWER. If we don't stamp it, the record sits in
     the inbox forever and every future live run pays to be told 'nothing wrong' again."""
-    store, _, recordings = setup_batch(tmp_path, monkeypatch)
+    _, recordings = setup_batch(fresh_store, tmp_path)
 
     result = run_nightly_batch("2026-07-13", mode="replay", recordings_dir=recordings)
 
     assert result["worklist"] == []
-    assert store.get_noted_records() == [], "a cleared record was left in the inbox"
+    assert fresh_store.get_noted_records() == [], "a cleared record was left in the inbox"
 
 
-def test_a_reviewed_record_does_not_come_back_on_the_next_run(tmp_path, monkeypatch):
-    store, _, recordings = setup_batch(tmp_path, monkeypatch, identity=[GROUNDED])
+def test_a_reviewed_record_does_not_come_back_on_the_next_run(fresh_store, tmp_path):
+    _, recordings = setup_batch(fresh_store, tmp_path, identity=[GROUNDED])
 
     run_nightly_batch("2026-07-13", mode="replay", recordings_dir=recordings)
     second = run_nightly_batch("2026-07-14", mode="replay", recordings_dir=recordings)
@@ -167,22 +152,21 @@ def test_a_reviewed_record_does_not_come_back_on_the_next_run(tmp_path, monkeypa
     assert second["counts"]["records"] == 0
     assert second["worklist"] == []
     # And the first run's finding was not written twice.
-    assert len(store.get_worklist("2026-07-13")) == 1
+    assert len(fresh_store.get_worklist("2026-07-13")) == 1
 
 
-def test_an_empty_inbox_is_not_an_error(tmp_path, monkeypatch):
-    fresh_store(tmp_path, monkeypatch)
+def test_an_empty_inbox_is_not_an_error(fresh_store, tmp_path):
     result = run_nightly_batch("2026-07-13", mode="replay",
                                recordings_dir=str(tmp_path / "recordings"))
     assert result["worklist"] == []
     assert result["counts"]["records"] == 0
 
 
-def test_running_twice_in_one_day_still_reports_that_days_findings(tmp_path, monkeypatch):
+def test_running_twice_in_one_day_still_reports_that_days_findings(fresh_store, tmp_path):
     """Second run: the inbox is empty because the first run stamped everything. The worklist
     for the day has NOT changed — reporting [] would tell a demo audience the pipeline just
     lost their findings."""
-    store, _, recordings = setup_batch(tmp_path, monkeypatch, identity=[GROUNDED])
+    _, recordings = setup_batch(fresh_store, tmp_path, identity=[GROUNDED])
 
     first = run_nightly_batch("2026-07-13", mode="replay", recordings_dir=recordings)
     second = run_nightly_batch("2026-07-13", mode="replay", recordings_dir=recordings)
@@ -193,25 +177,25 @@ def test_running_twice_in_one_day_still_reports_that_days_findings(tmp_path, mon
     assert second["worklist"] == first["worklist"]
 
 
-def test_a_malformed_batch_date_is_refused_before_anything_is_written(tmp_path, monkeypatch):
+def test_a_malformed_batch_date_is_refused_before_anything_is_written(fresh_store, tmp_path):
     """batch_date is the key the worklist is queried by. "2026-7-13" files the findings where
     nobody will ever look — and the records are stamped, so they never come back."""
-    store, _, recordings = setup_batch(tmp_path, monkeypatch, identity=[GROUNDED])
+    _, recordings = setup_batch(fresh_store, tmp_path, identity=[GROUNDED])
 
     for bad in ("2026-7-13", "13-07-2026", "yesterday", ""):
         with pytest.raises(ValueError):
             run_nightly_batch(bad, mode="replay", recordings_dir=recordings)
 
-    assert len(store.get_noted_records()) == 1, "a bad date must not consume the inbox"
+    assert len(fresh_store.get_noted_records()) == 1, "a bad date must not consume the inbox"
 
 
 # --- failure: all or nothing ----------------------------------------------------------
 
-def test_an_unreadable_reply_aborts_the_batch_and_writes_nothing(tmp_path, monkeypatch):
+def test_an_unreadable_reply_aborts_the_batch_and_writes_nothing(fresh_store, tmp_path):
     """The important one. If the clinical agent returns prose and we stamped the records
     anyway, those records leave the inbox with only HALF a review — permanently, and
     silently. Better to write nothing and let a retry re-ask."""
-    store = fresh_store(tmp_path, monkeypatch)
+    store = fresh_store
     save_noted_record(store)
     records = store.get_noted_records()
     recordings = str(tmp_path / "recordings")
@@ -227,12 +211,12 @@ def test_an_unreadable_reply_aborts_the_batch_and_writes_nothing(tmp_path, monke
     assert len(store.get_noted_records()) == 1, "the records must stay in the inbox for a retry"
 
 
-def test_an_unreadable_reply_does_not_wedge_replay_forever(tmp_path, monkeypatch):
+def test_an_unreadable_reply_does_not_wedge_replay_forever(fresh_store, tmp_path):
     """The trap. A live call RECORDS the reply before anything tries to parse it. So a junk
     reply becomes a junk recording, and every offline run afterwards replays it and aborts
     again — the pipeline is permanently stuck and nothing says why. The batch must quarantine
     the recording it could not parse, and say so."""
-    store = fresh_store(tmp_path, monkeypatch)
+    store = fresh_store
     save_noted_record(store)
     records = store.get_noted_records()
     recordings = str(tmp_path / "recordings")
@@ -249,12 +233,12 @@ def test_an_unreadable_reply_does_not_wedge_replay_forever(tmp_path, monkeypatch
     assert list((tmp_path / "recordings").glob("*.rejected")), "the bad reply must be kept to look at"
 
 
-def test_an_aborted_live_run_reports_what_it_spent(tmp_path, monkeypatch):
+def test_an_aborted_live_run_reports_what_it_spent(fresh_store, tmp_path, monkeypatch):
     """Task 13 needs 'the LLM cost N credits and returned unusable output in M runs'. Once the
     exception is raised, nobody can reconstruct the spend."""
     from app.agents.ledger import CreditLedger
 
-    store = fresh_store(tmp_path, monkeypatch)
+    store = fresh_store
     save_noted_record(store)
     records = store.get_noted_records()
     recordings = str(tmp_path / "recordings")
@@ -275,34 +259,33 @@ def test_an_aborted_live_run_reports_what_it_spent(tmp_path, monkeypatch):
     assert ledger.spent() == 1
 
 
-def test_a_missing_recording_aborts_the_batch_and_writes_nothing(tmp_path, monkeypatch):
-    store = fresh_store(tmp_path, monkeypatch)
-    save_noted_record(store)
+def test_a_missing_recording_aborts_the_batch_and_writes_nothing(fresh_store, tmp_path):
+    save_noted_record(fresh_store)
 
     with pytest.raises(FileNotFoundError):
         run_nightly_batch("2026-07-13", mode="replay",
                           recordings_dir=str(tmp_path / "no-recordings"))
 
-    assert len(store.get_noted_records()) == 1
+    assert len(fresh_store.get_noted_records()) == 1
 
 
 # --- money ----------------------------------------------------------------------------
 
-def test_replay_mode_never_touches_the_network(tmp_path, monkeypatch):
+def test_replay_mode_never_touches_the_network(fresh_store, tmp_path, monkeypatch):
     from app.agents import transport
 
     called = []
     monkeypatch.setattr(transport, "call_lyzr_live", lambda *a, **k: called.append(1))
-    store, _, recordings = setup_batch(tmp_path, monkeypatch, identity=[GROUNDED])
+    _, recordings = setup_batch(fresh_store, tmp_path, identity=[GROUNDED])
 
     run_nightly_batch("2026-07-13", mode="replay", recordings_dir=recordings)
     assert called == []
 
 
-def test_live_mode_without_a_ledger_is_refused(tmp_path, monkeypatch):
+def test_live_mode_without_a_ledger_is_refused(fresh_store, tmp_path):
     from app.agents.transport import LiveCallRefused
 
-    store, _, recordings = setup_batch(tmp_path, monkeypatch, identity=[GROUNDED])
+    _, recordings = setup_batch(fresh_store, tmp_path, identity=[GROUNDED])
     with pytest.raises(LiveCallRefused):
         run_nightly_batch("2026-07-13", mode="live", recordings_dir=recordings,
                           agent_id="agent-123", ledger=None)

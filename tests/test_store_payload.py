@@ -1,4 +1,3 @@
-import importlib
 import json
 
 import pytest
@@ -6,14 +5,9 @@ from sqlalchemy import text
 
 
 @pytest.fixture
-def store(tmp_path, monkeypatch):
-    """A fresh store bound to a throwaway SQLite file, not the demo DB."""
-    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path/'t.db'}")
-    import app.store as store
-    importlib.reload(store)
-    store.init_db()
-    yield store
-    importlib.reload(store)   # restore the module for other tests
+def store(fresh_store):
+    """The shared throwaway-db store fixture, under this file's historical name."""
+    return fresh_store
 
 
 def _report(payload_id="E1"):
