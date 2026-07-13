@@ -34,9 +34,18 @@ Live tracker for the current phase. Tick a box only when **verified by running i
         + processed-marker are written in ONE transaction via `record_agent_result` so the batch
         cannot lose or double-count findings. Inbox is **empty until Task 11** — no fixture carries
         a `clinical_note` yet. See `docs/decisions.md`.*
-  - [ ] Tasks 6–12: see `docs/superpowers/plans/2026-07-09-multi-agent-triage.md`
-        (Task 6 = finding schema + verbatim-evidence guard). **Only Task 12 makes a live Lyzr call**
-        — Tasks 6–11 run against recorded responses and cost nothing.
+  - [x] Task 6: finding schema + verbatim-evidence guard — *verified 2026-07-13: 64 passed; guard
+        demonstrated against a real note (hallucinated quote, degenerate `"for"`, and junk severity
+        all dropped; a whitespace-reflowed real quote kept). Beyond the plan: `partition_findings`
+        returns every drop **with reasons** (the drop rate is the thesis evidence — don't discard
+        it); values validated, not just keys; `MIN_EVIDENCE_CHARS=6` (a model could otherwise
+        "ground" an invented finding on `"a"`); Unicode punctuation folded (a curly apostrophe would
+        otherwise read as a hallucination and **inflate the headline number**). Two limits pinned by
+        `test_LIMIT_*`: it is **not** an injection defence, and verbatim ≠ faithful. See
+        `docs/decisions.md` + `docs/for-review.md`.*
+  - [ ] Tasks 7–12: see `docs/superpowers/plans/2026-07-09-multi-agent-triage.md`
+        (Task 7 = credit ledger). **Only Task 12 makes a live Lyzr call** — Tasks 7–11 run against
+        recorded responses and cost nothing.
   - [ ] **Task 13 (new, 2026-07-13): rules-vs-LLM comparison, N runs.** Run the LLM over the same
         fixtures the rules ran over, N times, and report the miss rate ("the agent missed the
         SpO2=105 critical in X of N runs"). This is the thesis-as-evidence slide, and it is what the

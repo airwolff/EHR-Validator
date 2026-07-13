@@ -224,3 +224,35 @@ screenshot them for the presentation. Note the free tier remained *sufficient* t
 iteration headroom, demo safety and quantified evidence, not a feature otherwise unshippable.
 · **Refs:** plan Tasks 7, 8, 12; new Task 13; `docs/phase-checklist.md`; supersedes the handoff's
 "Lyzr deployment shape" open decision (resolved: one generic agent, prompts in `specialists.py`).
+
+## 2026-07-13 — the evidence guard is a *fabrication* guard, and every drop is counted
+**Decision:** `app/agents/schema.py` keeps a finding only if it is well-formed *and* its `evidence`
+is a verbatim quote of the note. Three things beyond the plan: (1) `partition_findings` returns
+`(kept, dropped)` with **all** applicable reasons per drop — nothing is silently discarded;
+(2) `is_valid_finding` validates **values**, not just key-presence (severity/domain against allowed
+sets, required fields non-empty); (3) evidence must clear `MIN_EVIDENCE_CHARS = 6`, and `_norm` folds
+Unicode punctuation as well as case/whitespace. The guard is **renamed in our own docs from an
+"injection guard" to a fabrication guard**. · **Status:** accepted · **Why:** the plan's version had
+three holes. **The verbatim check was trivially defeatable** — any substring counted, so a model
+could "ground" a wholly invented finding on `"a"` or `"the"`, which appear in every note; a length
+floor makes the guard mean something (6 blocks the degenerate case while keeping genuinely short
+clinical quotes: "A1c 6.9", "room air", "SpO2 98%"). **Key-presence is not validity** — `severity:
+"banana"` passed, and `store.WORKLIST_DOMAIN_ORDER` sorts an unknown domain *silently last*, so junk
+would reach the DB and sink in the worklist unseen (Task 3's labs skew, again). **And `keep_grounded`
+threw the drops away** — but the drop rate IS the presentation's evidence, so it must be countable.
+Reasons are collected in full rather than first-match-wins: if `malformed` masked
+`evidence_not_in_note`, the hallucination rate we report would be undercounted by whatever share of
+bad findings also happened to be malformed. · **Consequences:** **Unicode folding protects the
+headline number.** Models re-type quotes with typographic punctuation (note has `patient's` U+0027,
+model returns `patient’s` U+2019). Unfolded, the substring check fails and a *real* finding is
+dropped as `evidence_not_in_note` — a **false hallucination inflating the exact statistic the thesis
+rests on**. Two limits are now pinned by `test_LIMIT_*` tests so a future session cannot mistake them
+for bugs: **(a) this is not an injection defence** — an attack carried *in the note* is, by
+construction, a verbatim quote of the note, so the guard keeps it (beating that needs ingest-time
+sanitisation, which we don't do); **(b) verbatim ≠ faithful** — the note says "Denies dysuria" and a
+model can claim the patient *has* it while citing "dysuria", a real substring. The guard proves the
+quote is real, not that it supports the claim. **The mitigation for (b) is that a human adjudicates
+the worklist — which is precisely why the output is a worklist and not an auto-correction.** Both are
+presentation material (see `docs/for-review.md`), not embarrassments. · **Refs:** `app/agents/schema.py`,
+`tests/test_agents_schema.py`, plan Task 6 (deviates: `partition_findings`, value validation,
+`MIN_EVIDENCE_CHARS`, Unicode fold, and the guard's honest name).
