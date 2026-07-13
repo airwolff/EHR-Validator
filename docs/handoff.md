@@ -2,66 +2,86 @@
 
 Read `CLAUDE.md` and `docs/phase-checklist.md` first, then this. See `docs/session-protocol.md` for
 how to use/update this file. **Verify the staleness block below before trusting anything here.**
-(A `SessionStart` hook now runs that check for you automatically and will say STALE if it drifted.)
+(A `SessionStart` hook runs that check automatically and will say STALE if it drifted.)
 
 ## Staleness block (check before trusting)
 - **Written:** 2026-07-13
-- **HEAD at write time:** `6e2ba6a` (branch `main`, in sync with `origin/main`)
-- **Uncommitted at write time:** none — working tree clean.
-- **Tests:** `python -m pytest -q` → **2 passed** (verified 2026-07-13).
+- **HEAD at write time:** `cf78881` (branch `main`, in sync with `origin/main`)
+- **Uncommitted at write time:** none — `git status -s` empty.
+- **Tests:** `python -m pytest -q` → **30 passed** (verified 2026-07-13).
 - **Boots?** Yes — `python -c "import app.main"` → `boots` (verified 2026-07-13).
-- **Staleness test:** if `git rev-parse --short HEAD` ≠ `6e2ba6a` or `git status -s` is non-empty,
+- **Staleness test:** if `git rev-parse --short HEAD` ≠ `cf78881` or `git status -s` is non-empty,
   this handoff is stale — trust git + code, rewrite it early.
 
 ## Where we are
 
-**Plan Task 1 is DONE and pushed.** Everything before it (Phase-2 routing, server boot) was already
-green. Tasks 2–12 are untouched.
+**Plan Tasks 1–4 are DONE and pushed. Tasks 5–12 are untouched.** Everything so far is the
+deterministic rules + persistence layer. **No Lyzr call has been made** — that is by design (credit
+budget); the agent layer starts at Task 5.
 
-- **Test harness exists** — `tests/`, pytest 8.3.4, 2 passing tests in
-  `tests/test_validator_baseline.py`. The temp-71.2°F regression guard is **proven to bite**: widening
-  the `temp_f` hard bound in `app/validator.py:49` flips the finding `critical`→`warning` and reds the
-  test. It is a real guard, not a vacuous one.
-- **Fixtures are tracked at `tests/fixtures/payloads/`** (5 canonical payloads). The repo-root
-  `payloads/` stays gitignored as pure generator output. Rationale in `docs/decisions.md` (2026-07-13).
-  `git clone && pip install -r requirements.txt && pytest` is now green with no generation step.
-- **The rules are now enforced by hooks, not memory** (`.claude/`, all verified by triggering them):
-  - `git commit`/`push` is **blocked** if pytest is red or a secret is staged.
-  - `docs/decisions.md` rejects any edit that removes text (append-only). Append at the end only.
-  - `db/queries.sql` rejects lowercase SQL keywords.
-  - The handoff staleness check runs at every session start.
-  - A **`/handoff` skill** runs this end-of-session ritual.
+Landed this session (each verified by running, not asserting):
+
+- **Task 2 — sex-restricted diagnosis-code rule** (`9153fcf`). Fires `critical` on `patient.sex`
+  when a sex-restricted ICD code contradicts a *definitely stated* M/F (pregnancy code on M,
+  prostate code on F). Two things beyond the plan, both from `/code-review`:
+  - The plan's code compared `sex == "M"` against a `.upper()`ed diagnosis code. A record with
+    `"sex": "m"` came back `status: pass`, `issue_count: 0`, **not escalated** — a silent false
+    negative in the engine the whole presentation argues is the *trustworthy* one. Sex is now
+    normalised (`_normalise_sex`).
+  - **`patient.sex` was removed from `REQUIRED`.** Declining to state sex previously scored
+    `critical` ("Required field is missing or empty") — the same severity as `SpO2 = 105`. An
+    undeclared sex (absent, `unknown`, `other`, **"prefer not to say"**) now yields **no issue at
+    any severity** and *suppresses* the sex-restricted rule (no asserted sex ⇒ nothing to
+    contradict). Unmappable junk (e.g. `"42"`) is `info`, aimed at the ingest mapping. Full
+    rationale in `docs/decisions.md` (2026-07-13).
+- **Task 3 — `labs[]` + ordered-vs-resulted rule** (`1a04253`). `warning` on either mismatch. Beyond
+  the plan: lab fields had **no entry in the router**, so they hit the `admin` catch-all
+  (`app/router.py:63`). Lab defects now route to **clinical** — otherwise the domain breakdown in
+  the SQL analytics would have read "admin" for every missing lab result. (This adds a prefix to
+  `_field_to_domain`; it does **not** touch `DOMAIN_PRIORITY` — see Dead ends.)
+- **Task 4 — persist `payload_json`** (`cf78881`). Every run now stores the raw record beside its
+  report, so a finding traces back to its source data and the Task-10 nightly batch has the note to
+  read. Beyond the plan: **`load_results.py` was not routing at all** — every row in the demo DB had
+  `routing_domain = NULL`, so `/stats` and the domain analytics reported *nothing* by domain. The
+  loader and `/validate` had silently drifted. `save_reports_bulk` now takes
+  `(report, source_system, routing, payload)` and both writers persist the same thing.
+
+Current demo DB (reloaded 2026-07-13 via `python load_results.py --fixtures`), from `get_stats()`:
+
+```
+total_runs: 5   passed: 1   pass_rate_pct: 20.0
+issues_by_severity: {critical: 11, warning: 3, info: 1}
+records_by_domain:  {billing: 1, clean: 1, identity: 3}
+```
 
 ## ► Next step (do this first)
 
-**Plan Task 2 — sex-restricted diagnosis-code rule.** This is a genuine red-green TDD cycle (unlike
-Task 1, whose tests locked existing behavior and passed immediately).
+**Plan Task 5 — `agent_findings` table + save/query functions.** This is where the Lyzr/agent layer
+begins. Plan: `docs/superpowers/plans/2026-07-09-multi-agent-triage.md` → "Task 5" (line 377); it
+specifies the test, the schema, and the commit message.
 
-Plan: `docs/superpowers/plans/2026-07-09-multi-agent-triage.md` → "Task 2" (line ~102). It is fully
-specified — test, implementation, and commit message are all written out. In order:
+The design point to protect: agent findings live in a **separate table** from `validation_issues`, so
+rule-caught and LLM-caught defects are never mixed. That separation *is* the presentation argument —
+at demo time you show exactly which engine caught what.
 
-1. Write `tests/test_validator_sex_codes.py` (given in the plan).
-2. Run `python -m pytest tests/test_validator_sex_codes.py -v` → **must FAIL** (no `patient.sex`
-   issue is produced yet). If it passes, stop — something is wrong with the premise.
-3. Add `SEX_RESTRICTED_CODES` + section 6 to `app/validator.py` (given in the plan).
-4. Re-run with `tests/test_validator_baseline.py` → all green.
-5. `/code-review`, get approval, commit `[feat] add sex-restricted diagnosis-code rule to LocalValidator`.
-
-Then Tasks 3→12 in order. Execution mode chosen: **subagent-driven**.
+Same loop as Tasks 2–4: write the failing test → run it and **watch it fail** → implement →
+`/code-review` → get approval → commit → push. Then Tasks 6→12 in order.
 
 ## Open decisions (not blocking the build)
 
 - **Lyzr deployment shape:** (a) one generic agent with prompts in our `specialists.py`
-  [recommended] vs (b) two deployed agents. Only needed at **Task 12**; needs you to create the agent
-  in Lyzr Studio and put `agent_id`/key in `.env`.
+  [recommended] vs (b) two deployed agents. Only needed at **Task 12**; needs you to create the
+  agent in Lyzr Studio and put `agent_id`/key in `.env`.
 - `docs/open-questions.md` **#1, #2, #3 are still OPEN** — they gate the Web UI and the Render
-  deploy, i.e. the *last two* checklist items. They do **not** block Tasks 2–12.
+  deploy, i.e. the *last two* checklist items. They do **not** block Tasks 5–12.
 
 ## Dead ends — don't retry
 
 - **Don't trigger the agents off `escalated`/rule-criticals.** The nightly batch selects on
   **note-presence** — a zero-rule-issue record (the wow catch) must still be processed.
-- **Don't edit `router.py`'s `DOMAIN_PRIORITY`.** Worklist precedence is a *separate* sort.
+- **Don't edit `router.py`'s `DOMAIN_PRIORITY`.** Worklist precedence is a *separate* sort. (Adding
+  a field→domain *prefix* to `_field_to_domain`, as Task 3 did for `labs[`, is a different thing and
+  is fine.)
 - **Don't bulk-run `LyzrValidator` per-record** (20 credits/mo). Task 12 gates it behind the ledger.
 - **Don't port `duly_noted`'s `post-edit-format.sh` hook.** It autoformats `*.md`/`*.json` and would
   reformat `db/queries.sql`, which this project forbids.
@@ -69,17 +89,31 @@ Then Tasks 3→12 in order. Execution mode chosen: **subagent-driven**.
 
 ## Gotchas / carry-forward
 
-- **Stale `.pyc` can lie to you.** Python's bytecode cache validates on source *size + mtime-seconds*.
-  Editing and reverting a file within the same second, with the same byte count, makes Python re-run
-  the **old** bytecode — tests then fail against source that is provably clean. If a result makes no
-  sense, `find . -name __pycache__ -type d -exec rm -rf {} +` and re-run.
+- **A schema change needs a real DB reset — `ensure_tables()` will NOT save you.** It is
+  `metadata.create_all`, which creates missing *tables* but **never adds a column to an existing
+  table**. Add a column and the app still boots clean, then dies on the first insert with
+  `no such column`. Tests never catch this (each builds a fresh DB); only the long-lived
+  `ehr_triage.db` does. After any column addition run `python load_results.py --fixtures` (drops,
+  recreates, reloads the 5 fixtures — synthetic, safe).
+- **When two code paths write the same table, a test must pin both.** Task 4's `payload_json` test
+  passed while the *bulk* path silently dropped both payload and routing. Nothing failed loudly: the
+  column existed, the inserts succeeded, the numbers were just empty.
+- **`/code-review` is earning its keep.** It caught the `"sex": "m"` false negative and the labs
+  routing skew — both silent, both would have survived a green suite. Run it before every commit.
+- **Stale `.pyc` can lie to you.** Bytecode is validated on source *size + mtime-seconds*. Edit and
+  revert a file within the same second, same byte count, and Python re-runs the **old** bytecode. If
+  a result makes no sense: `find . -name __pycache__ -type d -exec rm -rf {} +` and re-run.
 - **A crashing hook silently stops guarding.** Claude Code treats a non-2 exit as a *soft* error and
-  runs the tool anyway. Both hooks fail **open, deliberately**, on an unparseable payload. If you edit
-  them, keep that property — and test with `printf`, never `echo` (zsh's `echo` mangles `\n` and will
-  feed the hook invalid JSON).
+  runs the tool anyway. Both hooks fail **open, deliberately**, on an unparseable payload. If you
+  edit them, keep that property — and test with `printf`, never `echo` (zsh's `echo` mangles `\n`
+  and will feed the hook invalid JSON).
 - **`.gitignore` patterns match at any depth.** `payloads/` was silently ignoring
-  `tests/fixtures/payloads/` too; it is now anchored as `/payloads/`. Check `git check-ignore -v <path>`
-  before assuming a new file is trackable.
-- Lyzr = **20 credits/month**; fixtures/replay only. Keep `.env` / `ehr_triage.db` / `payloads/` gitignored.
-- Commit `[type] short desc`; **no `Co-Authored-By: Claude` trailer**. **Explicit approval before any
-  commit/push.** Verify by running, not asserting.
+  `tests/fixtures/payloads/` too; it is now anchored as `/payloads/`. Check
+  `git check-ignore -v <path>` before assuming a new file is trackable.
+- **Pre-existing quirk, left alone:** *any* issue — even an `info` — sets `status: "fail"`. So a
+  record whose only defect is an unmappable sex string reads as a failed record. Revisit only if it
+  muddies the demo.
+- Lyzr = **20 credits/month**; fixtures/replay only. Keep `.env` / `ehr_triage.db` / `payloads/`
+  gitignored.
+- Commit `[type] short desc`; **no `Co-Authored-By: Claude` trailer**. **Explicit approval before
+  any commit/push.** Verify by running, not asserting.

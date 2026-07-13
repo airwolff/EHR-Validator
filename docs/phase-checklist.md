@@ -24,7 +24,12 @@ Live tracker for the current phase. Tick a box only when **verified by running i
   - [x] Task 3: `labs[]` + ordered-vs-resulted rule — *verified 2026-07-13: warning on either
         mismatch; lab defects now route to **clinical**, not the `admin` catch-all (would have
         skewed the domain breakdown in the SQL analytics).*
-  - [ ] Tasks 4–12: see `docs/superpowers/plans/2026-07-09-multi-agent-triage.md`
+  - [x] Task 4: persist raw `payload_json` per run — *verified 2026-07-13: 30 passed; DB reloaded and
+        inspected. Also fixed `load_results.py`, which never routed — every row had
+        `routing_domain = NULL`, so `/stats` + the domain analytics were empty. Both writers
+        (`/validate` and the loader) now persist routing + payload. See `docs/decisions.md`.*
+  - [ ] Tasks 5–12: see `docs/superpowers/plans/2026-07-09-multi-agent-triage.md`
+        (Task 5 starts the Lyzr/agent layer)
 - [ ] **LLM escalation** — escalated records only → Lyzr → plain-English summary + cross-field
       contradiction detection (NOT re-validation). Test on fixtures only (credit budget)
 - [ ] **Postgres swap + Render deploy** — same SQLAlchemy Core code, switch DB URL (gated by OQ#3)
