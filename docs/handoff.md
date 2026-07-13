@@ -1,57 +1,85 @@
-# Handoff — EHR Triage Pipeline — 2026-07-11 (updated)
+# Handoff — EHR Triage Pipeline — 2026-07-13
 
 Read `CLAUDE.md` and `docs/phase-checklist.md` first, then this. See `docs/session-protocol.md` for
 how to use/update this file. **Verify the staleness block below before trusting anything here.**
-
-## ⚠️ CONCURRENCY WARNING
-Two CC sessions touched this repo. **Run exactly ONE session going forward.** A second session
-committed the baseline (below) while a first was mid-work. Before continuing, confirm no other
-session is open.
+(A `SessionStart` hook now runs that check for you automatically and will say STALE if it drifted.)
 
 ## Staleness block (check before trusting)
-- **Written:** 2026-07-11 (updated after a concurrent session committed)
-- **HEAD at write time:** `4fea28d` (branch `main`)
-- **Uncommitted at write time:** `M CLAUDE.md, docs/decisions.md, docs/handoff.md` · `?? docs/session-protocol.md`
-  — these are the **session-handoff-system upgrade** (this session), not yet committed.
-- **Boots?** Yes — `python -c "import app.main"` → OK (verified 2026-07-11).
-- **Staleness test:** if `git rev-parse --short HEAD` ≠ `4fea28d` or `git status -s` differs from the
-  line above, this handoff is stale — trust git + code, rewrite this early.
+- **Written:** 2026-07-13
+- **HEAD at write time:** `6e2ba6a` (branch `main`, in sync with `origin/main`)
+- **Uncommitted at write time:** none — working tree clean.
+- **Tests:** `python -m pytest -q` → **2 passed** (verified 2026-07-13).
+- **Boots?** Yes — `python -c "import app.main"` → `boots` (verified 2026-07-13).
+- **Staleness test:** if `git rev-parse --short HEAD` ≠ `6e2ba6a` or `git status -s` is non-empty,
+  this handoff is stale — trust git + code, rewrite it early.
 
 ## Where we are
-- **Baseline is COMMITTED** at `4fea28d`: Phase-2 wiring (`main.py`/`store.py`/`router.py` resynced,
-  boots), plus the framework docs, the approved spec, and the approved plan.
-  - Spec: `docs/specs/2026-07-08-multi-agent-triage-design.md`
-  - Plan: `docs/superpowers/plans/2026-07-09-multi-agent-triage.md` (12 TDD tasks)
-- **Task 1 is NOT started** — verified: no `tests/`, no `app/agents/`, no `pytest` in `requirements.txt`.
-- **Uncommitted:** the session-handoff protocol (`docs/session-protocol.md` + edits to `CLAUDE.md`,
-  `decisions.md`, this file). Safe on disk; needs a commit.
-- Execution mode chosen: **subagent-driven**.
+
+**Plan Task 1 is DONE and pushed.** Everything before it (Phase-2 routing, server boot) was already
+green. Tasks 2–12 are untouched.
+
+- **Test harness exists** — `tests/`, pytest 8.3.4, 2 passing tests in
+  `tests/test_validator_baseline.py`. The temp-71.2°F regression guard is **proven to bite**: widening
+  the `temp_f` hard bound in `app/validator.py:49` flips the finding `critical`→`warning` and reds the
+  test. It is a real guard, not a vacuous one.
+- **Fixtures are tracked at `tests/fixtures/payloads/`** (5 canonical payloads). The repo-root
+  `payloads/` stays gitignored as pure generator output. Rationale in `docs/decisions.md` (2026-07-13).
+  `git clone && pip install -r requirements.txt && pytest` is now green with no generation step.
+- **The rules are now enforced by hooks, not memory** (`.claude/`, all verified by triggering them):
+  - `git commit`/`push` is **blocked** if pytest is red or a secret is staged.
+  - `docs/decisions.md` rejects any edit that removes text (append-only). Append at the end only.
+  - `db/queries.sql` rejects lowercase SQL keywords.
+  - The handoff staleness check runs at every session start.
+  - A **`/handoff` skill** runs this end-of-session ritual.
 
 ## ► Next step (do this first)
-1. Confirm exactly one session is open. Run the start-of-session staleness check (`docs/session-protocol.md`).
-2. **Commit the pending handoff-protocol docs:** `[docs] add session-handoff protocol` (files:
-   `docs/session-protocol.md`, `CLAUDE.md`, `docs/decisions.md`, `docs/handoff.md`).
-3. Decide the plan's one open item — fixture location (recommend `tests/fixtures/payloads/`).
-4. **Start Task 1** (pytest harness + temp-71.2 regression guard), then proceed through the plan.
-   - *Task-1 preconditions pre-verified 2026-07-11 (ran the validator directly): `LocalValidator.validate()`
-     exists; `payloads/payload_bad_values.json` → exactly 1 `vitals.temp_f` issue @ `critical`;
-     `payloads/payload_clean.json` → status `pass`, 0 issues. Both fixtures match the plan's filenames.
-     The two guard tests should therefore PASS on first run — a red result means a fixture drifted;
-     stop and inspect before writing more.*
 
-## Open decision (not blocking the build)
-- **Lyzr deployment:** (a) one generic agent, prompts in our `specialists.py` [recommended] vs (b) two
-  deployed agents. Only needed at Task 12; needs the user to create the agent in Lyzr Studio + put
-  `agent_id`/key in `.env`.
+**Plan Task 2 — sex-restricted diagnosis-code rule.** This is a genuine red-green TDD cycle (unlike
+Task 1, whose tests locked existing behavior and passed immediately).
+
+Plan: `docs/superpowers/plans/2026-07-09-multi-agent-triage.md` → "Task 2" (line ~102). It is fully
+specified — test, implementation, and commit message are all written out. In order:
+
+1. Write `tests/test_validator_sex_codes.py` (given in the plan).
+2. Run `python -m pytest tests/test_validator_sex_codes.py -v` → **must FAIL** (no `patient.sex`
+   issue is produced yet). If it passes, stop — something is wrong with the premise.
+3. Add `SEX_RESTRICTED_CODES` + section 6 to `app/validator.py` (given in the plan).
+4. Re-run with `tests/test_validator_baseline.py` → all green.
+5. `/code-review`, get approval, commit `[feat] add sex-restricted diagnosis-code rule to LocalValidator`.
+
+Then Tasks 3→12 in order. Execution mode chosen: **subagent-driven**.
+
+## Open decisions (not blocking the build)
+
+- **Lyzr deployment shape:** (a) one generic agent with prompts in our `specialists.py`
+  [recommended] vs (b) two deployed agents. Only needed at **Task 12**; needs you to create the agent
+  in Lyzr Studio and put `agent_id`/key in `.env`.
+- `docs/open-questions.md` **#1, #2, #3 are still OPEN** — they gate the Web UI and the Render
+  deploy, i.e. the *last two* checklist items. They do **not** block Tasks 2–12.
 
 ## Dead ends — don't retry
+
 - **Don't trigger the agents off `escalated`/rule-criticals.** The nightly batch selects on
   **note-presence** — a zero-rule-issue record (the wow catch) must still be processed.
 - **Don't edit `router.py`'s `DOMAIN_PRIORITY`.** Worklist precedence is a *separate* sort.
 - **Don't bulk-run `LyzrValidator` per-record** (20 credits/mo). Task 12 gates it behind the ledger.
-- **Don't run two CC sessions on this repo at once** (this is why the earlier handoff went stale).
+- **Don't port `duly_noted`'s `post-edit-format.sh` hook.** It autoformats `*.md`/`*.json` and would
+  reformat `db/queries.sql`, which this project forbids.
+- **Don't run two CC sessions on this repo at once** (this is what made the 2026-07-11 handoff stale).
 
 ## Gotchas / carry-forward
+
+- **Stale `.pyc` can lie to you.** Python's bytecode cache validates on source *size + mtime-seconds*.
+  Editing and reverting a file within the same second, with the same byte count, makes Python re-run
+  the **old** bytecode — tests then fail against source that is provably clean. If a result makes no
+  sense, `find . -name __pycache__ -type d -exec rm -rf {} +` and re-run.
+- **A crashing hook silently stops guarding.** Claude Code treats a non-2 exit as a *soft* error and
+  runs the tool anyway. Both hooks fail **open, deliberately**, on an unparseable payload. If you edit
+  them, keep that property — and test with `printf`, never `echo` (zsh's `echo` mangles `\n` and will
+  feed the hook invalid JSON).
+- **`.gitignore` patterns match at any depth.** `payloads/` was silently ignoring
+  `tests/fixtures/payloads/` too; it is now anchored as `/payloads/`. Check `git check-ignore -v <path>`
+  before assuming a new file is trackable.
 - Lyzr = **20 credits/month**; fixtures/replay only. Keep `.env` / `ehr_triage.db` / `payloads/` gitignored.
-- `db/queries.sql` UPPERCASE; no autoformatter. Commit `[type] short desc`; **no `Co-Authored-By: Claude`**.
-- **Explicit approval before any commit/push.** Verify by running, not asserting.
+- Commit `[type] short desc`; **no `Co-Authored-By: Claude` trailer**. **Explicit approval before any
+  commit/push.** Verify by running, not asserting.
