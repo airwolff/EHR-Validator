@@ -60,11 +60,22 @@ Live tracker for the current phase. Tick a box only when **verified by running i
         model's**); the stored question is re-checked on read; `ledger=None` in live mode now
         **refuses** instead of meaning "no cap"; HTTP timeout + status code in the error (never the
         API key). `message` must be **deterministic** — pin that in Task 9. See `docs/decisions.md`.*
-  - [ ] Tasks 9–12: see `docs/superpowers/plans/2026-07-09-multi-agent-triage.md`
-        (Task 9 = specialist definitions). **Only Task 12 makes a live Lyzr call** — Tasks 9–11 run
-        against recorded responses and cost nothing. **Task 9 must include a determinism test on
-        `build_message`** (same records → byte-identical text), or replay never hits and every live
-        batch re-pays for records it already recorded.
+  - [x] Task 9: clinical + identity specialists, message building, reply parsing — *verified
+        2026-07-13: 126 passed; the Task-8 determinism trap is CLOSED (shuffled records → identical
+        fingerprint, demonstrated outside pytest). Deviates from the plan: `parse_findings` **raises**
+        on an unreadable reply instead of returning `[]` (silence would score a broken agent as a
+        perfect one and hollow out Task 13's miss rate); the contract **enumerates the legal domains
+        and severities, generated from `schema.py`'s own constants** so prompt and guard cannot drift
+        (an undefined field is a field the model guesses at, and its guess is tallied against it —
+        our defect, scored as the model's); findings carry a **`record_id` falling back to
+        `run-<run_id>`** (a record with no `encounter_id` would otherwise have every finding
+        discarded while still being marked processed); slices `copy.deepcopy` (a JSON round-trip
+        raises `TypeError` on Postgres `Decimal`s). See `docs/decisions.md`.*
+  - [ ] Tasks 10–12: see `docs/superpowers/plans/2026-07-09-multi-agent-triage.md`
+        (Task 10 = nightly batch orchestration). **Only Task 12 makes a live Lyzr call** — Tasks 10
+        and 11 run against recorded responses and cost nothing. **Task 10 owes two counted tallies:**
+        findings dropped for an unknown `record_id`, and specialists whose reply was unparseable —
+        both are thesis evidence, and both are silent if not counted.
   - [ ] **Task 13 (new, 2026-07-13): rules-vs-LLM comparison, N runs.** Run the LLM over the same
         fixtures the rules ran over, N times, and report the miss rate ("the agent missed the
         SpO2=105 critical in X of N runs"). This is the thesis-as-evidence slide, and it is what the

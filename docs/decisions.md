@@ -320,3 +320,35 @@ ledger and the recordings in `app/agents/_fileio.py`. · **Refs:** `app/agents/t
 `app/agents/_fileio.py`, `tests/test_agents_transport.py`, plan Task 8 (deviates: fingerprinted
 recording key + stored-question check, ledger and agent_id required in live mode, HTTP timeout +
 status code, `LYZR_RECORDINGS_DIR`).
+
+## 2026-07-13 — an unreadable reply is not a clean record; every field we demand, we define
+
+**Decision:** `app/agents/specialists.py` defines the two agents (clinical, identity), each seeing
+only its own slice of the record. Five deviations from plan Task 9: (1) **`parse_findings` RAISES
+`ResponseUnparseable`** on a reply it cannot read, instead of returning `[]`; (2) the message is
+**deterministic** — records sorted by `run_id`, `json.dumps(sort_keys=True)`, prompts built from
+constants; (3) the contract **enumerates every allowed value** (domains and severities generated from
+`schema.VALID_DOMAINS`/`VALID_SEVERITIES` so prompt and guard cannot drift apart) and defines every
+field it asks for; (4) findings are attributed by **`record_id`**, which falls back to `run-<run_id>`
+when a payload has no `encounter_id`; (5) slices are `copy.deepcopy`, not a JSON round-trip. ·
+**Status:** accepted · **Why:** **returning `[]` for a broken reply makes a broken agent look like a
+perfect one.** "The agent returned garbage" and "the agent found nothing wrong" would be the same
+value, so an agent that had failed completely would score as never raising a false finding and never
+missing one — and Task 13's miss rate, the number this whole project argues from, would be measuring
+silence. **An undefined field is a field the model guesses at.** We demanded a `domain` and never said
+which four were legal; a sensible guess ("vitals") is rejected by `is_valid_finding`, tallied as
+MALFORMED, and reported as the model's unreliability. **That is our prompt's defect scored as the
+model's — the Task-6 Unicode bug wearing a different hat, corrupting the same headline number.** The
+prompt is now generated from the guard's own constants, so the two cannot drift. · **Consequences:**
+**`parse_findings` tolerates how models WRAP an answer and refuses how they FAIL.** Code fences, a
+preamble ("Here are the findings:"), a bare list — all parsed, because throwing a *correct* answer away
+as unreadable would inflate the LLM-failure rate **in our own favour**, which is worse than useless: it
+is a number we would have to retract. Only a reply with no findings list anywhere raises. **A record
+with no `encounter_id` used to be unattributable**: the batch discards findings whose id was not in the
+batch, so every finding about that record would vanish *while the record was still stamped processed* —
+gone from the inbox forever, with its defects unreported. `run-<run_id>` cannot be missing. The
+JSON-round-trip deep copy would have **raised TypeError on a `Decimal`**, which is exactly what Postgres
+returns for a NUMERIC column — a crash waiting on the deploy target. Error messages truncate the reply
+to 200 chars: a model's 4KB apology echoes the chart back, and that should not land whole in a log or a
+screenshot. · **Refs:** `app/agents/specialists.py`, `tests/test_agents_specialists.py`, plan Task 9
+(deviates: raise-not-empty, determinism, enumerated contract, `record_id` fallback, deepcopy).
