@@ -10,8 +10,34 @@ The trick: write the new content to a temporary file, then rename it over the ta
 A rename is all-or-nothing at the filesystem level — the target is either the old content or
 the new one, never a mix.
 """
+import fcntl
 import os
 import tempfile
+from contextlib import contextmanager
+
+
+@contextmanager
+def exclusive_lock(lock_path):
+    """Let only one process at a time through this block, machine-wide.
+
+    Used by anything that reads state, decides, and then writes it back — the ledger (read the
+    count, check the budget, write the new count) and the nightly batch (read the inbox, ask
+    the agents, stamp the records). Without it, two processes both read the same "before"
+    state and both act on it: the ledger lets two spenders past a cap of one, and the batch
+    writes every finding twice and double-counts the worklist.
+
+    The lock lives in its OWN file, never the file being written: atomic_write_text swaps the
+    target's inode via os.replace, and a lock held on the old inode would guard nothing.
+
+    fcntl is POSIX — fine on macOS and Render, would need revisiting on Windows.
+    """
+    os.makedirs(os.path.dirname(os.path.abspath(lock_path)), exist_ok=True)
+    with open(lock_path, "w") as lock:
+        fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
 
 
 def atomic_write_text(path, text):

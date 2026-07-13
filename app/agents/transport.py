@@ -114,6 +114,22 @@ class Replayer:
         return saved["response"]
 
 
+def quarantine_recording(recordings_dir, specialist, message):
+    """Move a recording aside so it stops being replayed. Returns the new path, or None.
+
+    A live call records the reply BEFORE anything tries to parse it — which is right (an
+    honest record of what the agent actually said), but it means a junk reply becomes a junk
+    recording, and every offline run afterwards replays the junk and fails again. The pipeline
+    would be permanently wedged with no hint as to why. Renaming it to .rejected takes it out
+    of the replay path while keeping it on disk to look at: it is evidence, not garbage."""
+    path = recording_path(recordings_dir, specialist, message)
+    if not os.path.exists(path):
+        return None
+    rejected = path + ".rejected"
+    os.replace(path, rejected)
+    return rejected
+
+
 def record_response(recordings_dir, specialist, message, raw):
     """Save an agent's answer alongside the question that produced it."""
     atomic_write_text(

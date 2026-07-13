@@ -352,3 +352,38 @@ returns for a NUMERIC column — a crash waiting on the deploy target. Error mes
 to 200 chars: a model's 4KB apology echoes the chart back, and that should not land whole in a log or a
 screenshot. · **Refs:** `app/agents/specialists.py`, `tests/test_agents_specialists.py`, plan Task 9
 (deviates: raise-not-empty, determinism, enumerated contract, `record_id` fallback, deepcopy).
+
+## 2026-07-13 — the batch is all-or-nothing, and a cleared record is still a reviewed record
+
+**Decision:** `app/agents/batch.py` runs the agents: inbox → one call per specialist → attribute →
+guard → persist → stamp. Five deviations from plan Task 10: (1) **every record is stamped, including
+ones the agents cleared** (the plan only wrote when a record HAD findings); (2) findings from all
+specialists for one record are written in **one call per record**, not one per specialist; (3) an
+unreadable reply **aborts the whole batch** (`BatchAborted`) — nothing written, nothing stamped, and
+the offending recording is **quarantined** to `.rejected`; (4) the batch returns `{"worklist",
+"dropped", "counts"}`, not a bare list; (5) `domain`/`owner` are stamped from the specialist **before**
+the guard runs. The batch validates `batch_date` (`YYYY-MM-DD`) and holds an exclusive lock for the
+whole run. · **Status:** accepted · **Why:** **stamping only records with findings means every clean
+record is re-read — and in live mode re-paid for — on every run, forever.** Zero findings is an answer,
+not an absence of one (this is the Task-5 marker argument, and the plan's batch quietly broke it).
+**Writing per specialist leaves a record half-reviewed:** a crash between the clinical call and the
+identity call stamps the record with only half its review, and because stamping removes it from the
+inbox, no future run ever revisits it. Same reasoning for aborting on an unreadable reply: the only
+alternatives are to persist half a review or to guess what the model meant. · **Consequences:** **A
+junk reply, once recorded, would wedge replay permanently.** The transport records a reply BEFORE
+anything parses it (deliberately — it is an honest record of what the agent said), so a live call that
+returns prose leaves a junk recording that every future offline run replays and fails on, with nothing
+saying why. The batch now moves it to `<name>.rejected`: out of the replay path, still on disk as
+evidence. `BatchAborted.credits_spent` carries what the failed run cost — after the raise, nobody can
+reconstruct it, and **"the LLM cost N credits and returned unusable output in M of N runs" is the
+sentence Task 13 exists to produce.** The specialist, not the model, owns `domain`: we overwrite it
+anyway, so letting `is_valid_finding` reject a finding for a bad domain first would mark the model down
+on a field we discard — **inflating the very drop rate the presentation reports.** An empty inbox
+returns **the day's existing worklist**, not `[]`: a second run on the same date would otherwise tell a
+demo audience the pipeline had lost their findings. `batch_date` is validated because a typo
+(`"2026-7-13"`) files findings under a key nothing queries **while still stamping the records** — they
+would be gone from the inbox and invisible to every query. The whole run holds an `flock` (shared with
+the ledger, in `_fileio.exclusive_lock`): two overlapping runs would both read the same unstamped
+inbox and write every finding twice. · **Refs:** `app/agents/batch.py`, `tests/test_agents_batch.py`,
+`app/agents/_fileio.py`, plan Task 10 (deviates: stamp-always, per-record write, abort + quarantine,
+counted result, stamp-before-guard).

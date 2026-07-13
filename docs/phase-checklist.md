@@ -71,11 +71,22 @@ Live tracker for the current phase. Tick a box only when **verified by running i
         `run-<run_id>`** (a record with no `encounter_id` would otherwise have every finding
         discarded while still being marked processed); slices `copy.deepcopy` (a JSON round-trip
         raises `TypeError` on Postgres `Decimal`s). See `docs/decisions.md`.*
-  - [ ] Tasks 10–12: see `docs/superpowers/plans/2026-07-09-multi-agent-triage.md`
-        (Task 10 = nightly batch orchestration). **Only Task 12 makes a live Lyzr call** — Tasks 10
-        and 11 run against recorded responses and cost nothing. **Task 10 owes two counted tallies:**
-        findings dropped for an unknown `record_id`, and specialists whose reply was unparseable —
-        both are thesis evidence, and both are silent if not counted.
+  - [x] Task 10: nightly batch orchestration — *verified 2026-07-13: 141 passed; **ran end-to-end
+        against a real SQLite DB** — a record that passes every deterministic rule, the identity
+        agent catching the wrong-patient note, and 2 of the 3 returned findings dropped and counted
+        (`{records: 1, returned: 3, kept: 1, dropped: 2, unknown_record: 1}`). Deviates from the
+        plan: **every record is stamped, including cleared ones** (the plan re-read and re-paid for
+        clean records forever); all findings for a record are written in ONE call (per-specialist
+        writes leave a record half-reviewed and stamped); an unreadable reply **aborts the batch**
+        and **quarantines the recording** (else the junk recording replays forever and wedges the
+        pipeline); returns `{worklist, dropped, counts}` incl. `credits_spent`; `domain`/`owner`
+        stamped before the guard. See `docs/decisions.md`.*
+  - [ ] Tasks 11–12: see `docs/superpowers/plans/2026-07-09-multi-agent-triage.md`
+        (Task 11 = demo fixtures + e2e). **Only Task 12 makes a live Lyzr call.** **Task 11's
+        recorded responses in the plan are STALE** — they are keyed by specialist name and their
+        findings carry `encounter_id`; recordings are now keyed by a fingerprint of the message and
+        findings carry `record_id`. Generate them from the real `build_message` output (costs
+        nothing — a recording is just a file), don't copy them out of the plan.
   - [ ] **Task 13 (new, 2026-07-13): rules-vs-LLM comparison, N runs.** Run the LLM over the same
         fixtures the rules ran over, N times, and report the miss rate ("the agent missed the
         SpO2=105 critical in X of N runs"). This is the thesis-as-evidence slide, and it is what the

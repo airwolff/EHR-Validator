@@ -17,14 +17,12 @@ The cap survived the upgrade from the 20-credit free tier to Starter's 2,000 on 
 A spend gate is correct engineering at any budget, and the default here stays
 free-tier-safe so cancelling the subscription needs no code change.
 """
-import fcntl
 import json
 import os
 import re
-from contextlib import contextmanager
 from datetime import datetime
 
-from app.agents._fileio import atomic_write_text
+from app.agents._fileio import atomic_write_text, exclusive_lock
 
 MONTH_KEY = re.compile(r"^\d{4}-(0[1-9]|1[0-2])$")
 
@@ -87,24 +85,13 @@ class CreditLedger:
         if not MONTH_KEY.match(str(self.month)):
             raise ValueError(f"month must be YYYY-MM, got {self.month!r}.")
 
-    @contextmanager
     def _exclusive(self):
         """Hold an exclusive lock across the whole read-modify-write.
 
-        spend() reads the count, decides, then writes. Two processes without this lock
-        both read 14/15, both decide there is room, and both write 15: two credits spent,
-        one recorded — the gate in front of real money, off by one per race. The lock is a
-        SEPARATE file because _write swaps the ledger's inode via os.replace; a lock held
-        on the old inode would guard nothing.
-        """
-        lock_path = self.path + ".lock"
-        os.makedirs(os.path.dirname(os.path.abspath(lock_path)), exist_ok=True)
-        with open(lock_path, "w") as lock:
-            fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
-            try:
-                yield
-            finally:
-                fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
+        spend() reads the count, decides, then writes. Two processes without this lock both
+        read 14/15, both decide there is room, and both write 15: two credits spent, one
+        recorded — the gate in front of real money, off by one per race."""
+        return exclusive_lock(self.path + ".lock")
 
     def _read_months(self):
         if not os.path.exists(self.path):
