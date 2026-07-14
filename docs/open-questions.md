@@ -33,17 +33,30 @@ deterministic-first thesis rather than contradicting it. Cheap: fires only on co
 require engineering a conflict — which is a bit staged. Decide with real batch output in hand.
 **Blocks:** nothing. Everything through Task 13 proceeds without it.
 
+## #6 — Lyzr plan: still FREE tier; Starter not purchased (new 2026-07-14)
+**Status:** RESOLVED (2026-07-14)
+Andy confirmed the Starter upgrade was **never purchased** (OQ #4 recorded it as done — it wasn't;
+he'll buy it only if needed). The account is the free **20 credits/month** plan, resetting Aug 11.
+After this session's live runs the sidebar showed ~**14.8 left**. Sizing that matters for Task 13:
+a batch run costs ~2 credits **regardless of how many records are in it** (one message per
+specialist), so N comparison runs ≈ 2×N credits — **N=5 runs fits in 10 credits** with ~5 spare.
+Buy Starter only if Task 13's design needs more than ~7 runs or prompt iteration goes badly.
+**Blocks:** nothing — Task 13 proceeds on the free tier with N sized accordingly.
+
 ---
 ## Resolved
 _(move items here with the resolution + date as they close)_
 
 ## #4 — Lyzr plan + deployment shape
-**Status:** RESOLVED (2026-07-13)
-Upgraded to **Starter** ($19/mo, 2,000 credits) — a batch run costs ~2 credits, so the free tier's
-20/mo allowed only ~10 runs total (build + one demo, no prompt iteration, no rehearsal). Starter
-allows ~1,000. **Architecture unchanged:** record/replay and the credit ledger are kept (the ledger
+**Status:** RESOLVED (2026-07-13) — **CORRECTED 2026-07-14: Starter was never actually purchased;
+see #6. The architecture decisions below stand; the plan is still free tier, 20/mo.**
+Planned upgrade to **Starter** ($19/mo, 2,000 credits) — a batch run costs ~2 credits, so the free
+tier's 20/mo allowed only ~10 runs total (build + one demo, no prompt iteration, no rehearsal).
+Starter allows ~1,000. **Architecture unchanged:** record/replay and the credit ledger are kept (the ledger
 cap is *raised*, not removed). Prompts stay in `specialists.py` in git — **one generic agent**, not
 two deployed ones — despite Starter's 15-agent allowance, because diffable version-controlled prompts
 are the better engineering story and survive Lyzr going away. Rationale in `docs/decisions.md`.
-**Was blocking:** Task 12 (needs `agent_id`/key in `.env`). **Still to do:** create the agent in Lyzr
-Studio and put `agent_id` + key in `.env` before Task 12.
+**Was blocking:** Task 12 (needs `agent_id`/key in `.env`). **Done 2026-07-14:** "EHR Batch
+Specialist" created in Lyzr Studio (claude-sonnet-5, temp 0, no features); id in `.env` as
+`LYZR_BATCH_AGENT_ID`; first live runs made. **But see #6 — the account looks like it is still on
+the free 20-credit plan.**

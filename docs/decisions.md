@@ -387,3 +387,66 @@ the ledger, in `_fileio.exclusive_lock`): two overlapping runs would both read t
 inbox and write every finding twice. · **Refs:** `app/agents/batch.py`, `tests/test_agents_batch.py`,
 `app/agents/_fileio.py`, plan Task 10 (deviates: stamp-always, per-record write, abort + quarantine,
 counted result, stamp-before-guard).
+
+## 2026-07-14 — Task 11: demo fixtures are tests/fixtures data; recordings are generated, never hand-authored
+
+**Decision:** the two demo payloads live at `tests/fixtures/payloads/payload_wrong_patient_note.json`
+and `payload_note_clean.json` (tracked; `/payloads/` stays gitignored). The wow note was rewritten to a
+**hypertension follow-up** so its clinical content agrees with the structured I10 diagnosis — only the
+identity axis (62-year-old gentleman vs a 34-year-old woman) is wrong. Test recordings are generated at
+test time from the real `build_message()` output (`tests/conftest.py::record_reply`); nothing static is
+committed under `tests/fixtures/recordings/`. The e2e suite gained a **mixed-batch test**: both records
+in one batch, plus a finding that names the clean record while quoting the wow note. Shared test
+helpers (`fresh_store` with a restore-reload, `record_reply`, `save_noted_record`) were consolidated
+into `tests/conftest.py`. · **Status:** accepted · **Why:** the plan's BPH/tamsulosin note contradicted
+the diagnosis list — the clinical prompt *invites* flagging exactly that, so the live run would have
+produced findings the pinned "identity only" narrative denies (review CONFIRMED; the live run then
+proved the same instinct on the demographics anyway). Fingerprint-keyed recordings make hand-authored
+static recordings dead files. The single-record tests could not catch an attach-to-the-wrong-record or
+judge-against-the-wrong-note bug — nothing in the suite ran a batch over two coexisting records. The
+store-reload helper existed in four drifting copies, three of which left `app.store` bound to a deleted
+temp DB for later-collected tests. · **Consequences:** the clean test pins the full counts dict
+(`records: 1` is load-bearing — without it the test passes vacuously on an empty inbox, verified by
+experiment). `ingest()` routes via `route()` + `source_system` so test rows match production shape. ·
+**Refs:** `tests/test_e2e_wow_catch.py`, `tests/conftest.py`, plan Task 11 (deviates: fixture location,
+generated recordings, mixed batch).
+
+## 2026-07-14 — Task 12: the credit gate lives inside LyzrValidator, not in its callers
+
+**Decision:** `LyzrValidator.validate` itself charges the ledger — free config checks first, then
+`spend(1)`, then the network via `transport.call_lyzr_live` (one Lyzr transport, with timeout and
+key-scrubbed errors). `app/main.py` carries no spend gate; it translates `BudgetExceeded` → HTTP 429
+and `LedgerCorrupt` → 503. New CLI `python -m app.agents --date … --mode replay|live` prints the whole
+batch result and turns deliberate refusals into one-line `batch refused: …` exits. `ledger_path()`
+lives beside the ledger; `*.lock` sidecars are gitignored; `batch_date` is validated as a real calendar
+date (regex + strptime). The batch agent id comes from `LYZR_BATCH_AGENT_ID`, falling back to
+`LYZR_AGENT_ID` (the Phase-1 validator agent, which has its own baked-in prompt). · **Status:**
+accepted · **Why:** review CONFIRMED that a caller-side gate left `load_results.py --engine lyzr`
+completely unmetered — one live call per record of the bulk dataset, the exact drain the ledger exists
+to prevent — and that charging before the config check let a mis-deployed server (engine set, key
+missing) brick a month's budget on requests that never touched Lyzr. Verified by running: bulk load
+with budget 0 dies on `BudgetExceeded` before any I/O. · **Consequences:** every constructor of
+`LyzrValidator` is gated by construction; guard tests use fake creds + an unroutable localhost URL so
+no state of the code lets the suite reach Lyzr (a real credit was spent learning this — see the ledger
+entry below). · **Refs:** `app/validator.py`, `app/main.py`, `app/agents/__main__.py`,
+`tests/test_engine_guard.py`, plan Task 12 (deviates: gate location, HTTP translation, env fallback).
+
+## 2026-07-14 — first live run: the JSON-escape rule earns its place in the contract
+
+**Decision:** one generic passthrough agent ("EHR Batch Specialist", `anthropic/claude-sonnet-5`,
+temperature 0, no Lyzr features, Memory off) serves both specialists; the role/instructions in Lyzr are
+a three-sentence "follow the message, return only JSON" shell because the real prompt rides inside
+every message. `_CONTRACT` gained: *never put an unescaped double-quote inside a string value*. The
+first live run's quarantined identity reply (`identity-c5a33ce664c6.json.rejected`) is **committed as
+evidence**, alongside the two good recordings from the second run. · **Status:** accepted · **Why:**
+the very first live reply broke JSON by quoting ("gentleman") inside a string — the model caught the
+wrong-patient content and lost the whole reply to a quote mark. Temperature 0 makes that failure
+deterministic: retrying without the contract fix would buy the identical failure. The abort machinery
+worked exactly as designed (nothing written, records kept in the inbox, junk quarantined, spend
+recorded: `BatchAborted.credits_spent`). · **Consequences:** Task 13 has its first real data point —
+1 of 2 live runs returned unusable output, 2 credits paid for it. The live worklist shows the wow
+record caught **four ways** (both specialists, sex + age each) — richer than the authored test
+narrative, exactly as the Task-11 review predicted. Ledger and Lyzr agree: 4 credits spent 2026-07.
+**Open:** the Studio sidebar shows a 20-credit monthly quota resetting Aug 11 despite the 2026-07-13
+Starter upgrade — verify billing before sizing Task 13 (OQ #6). · **Refs:**
+`app/agents/specialists.py` (`_CONTRACT`), `app/agents/recordings/`, `docs/for-review.md`.

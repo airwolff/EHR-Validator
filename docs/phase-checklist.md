@@ -81,18 +81,33 @@ Live tracker for the current phase. Tick a box only when **verified by running i
         and **quarantines the recording** (else the junk recording replays forever and wedges the
         pipeline); returns `{worklist, dropped, counts}` incl. `credits_spent`; `domain`/`owner`
         stamped before the guard. See `docs/decisions.md`.*
-  - [ ] Tasks 11–12: see `docs/superpowers/plans/2026-07-09-multi-agent-triage.md`
-        (Task 11 = demo fixtures + e2e). **Only Task 12 makes a live Lyzr call.** **Task 11's
-        recorded responses in the plan are STALE** — they are keyed by specialist name and their
-        findings carry `encounter_id`; recordings are now keyed by a fingerprint of the message and
-        findings carry `record_id`. Generate them from the real `build_message` output (costs
-        nothing — a recording is just a file), don't copy them out of the plan.
+  - [x] Task 11: demo fixtures + e2e tests — *verified 2026-07-14: 144 passed; wow payload passes
+        every rule (`issue_count == 0` asserted through the real ingest path), clean note yields
+        zero findings with the full counts dict pinned, and a **mixed batch** proves per-record
+        attribution + evidence judging (a finding naming the clean record while quoting the wow
+        note is dropped and counted). Fixtures at `tests/fixtures/payloads/`; recordings generated
+        from real `build_message()` output at test time. Wow note rewritten to hypertension so only
+        the identity axis is wrong (review: the BPH note invited a live clinical finding the
+        narrative denied). Shared `fresh_store`/`record_reply`/`save_noted_record` consolidated
+        into `tests/conftest.py` with a restore-reload. See `docs/decisions.md` (2026-07-14).*
+  - [x] Task 12: batch CLI + Lyzr spend gate — *verified 2026-07-14: 152 passed; **first live runs
+        made.** `python -m app.agents --date … --mode replay|live` works end-to-end (uvicorn ingest
+        → live batch → free replay). Deviates from the plan: the ledger charge lives **inside
+        `LyzrValidator.validate`** (config checks → spend → network via `transport.call_lyzr_live`),
+        closing the unmetered `load_results.py --engine lyzr` bulk path — demonstrated: budget 0
+        refuses before any I/O. `BudgetExceeded` → HTTP 429, `LedgerCorrupt` → 503; CLI refusals are
+        one-liners; batch agent id from `LYZR_BATCH_AGENT_ID` (falls back to `LYZR_AGENT_ID`).
+        **Live result:** run 1 aborted — the identity reply broke JSON on an unescaped quote
+        (quarantined, committed as Task-13 evidence); `_CONTRACT` gained a JSON-escape rule; run 2
+        produced 4 grounded critical findings on the wow record, clean record cleared, 0 dropped.
+        4 credits spent. See `docs/decisions.md` (2026-07-14).*
   - [ ] **Task 13 (new, 2026-07-13): rules-vs-LLM comparison, N runs.** Run the LLM over the same
         fixtures the rules ran over, N times, and report the miss rate ("the agent missed the
         SpO2=105 critical in X of N runs"). This is the thesis-as-evidence slide, and it is what the
-        Lyzr **Starter** upgrade was bought for — the free tier afforded this comparison roughly
-        *once*. Keep the credit ledger and record/replay; raise the ledger cap, don't remove it.
-        See `docs/decisions.md` (2026-07-13) and OQ #4 (RESOLVED).
+        Lyzr **Starter** upgrade was considered for — **note 2026-07-14: Starter was NOT purchased;
+        still free tier, ~14.8 credits left, so size N ≤ 5 (2 credits/run) or buy Starter first —
+        see OQ #6.** Keep the credit ledger and record/replay; raise the ledger cap, don't remove it.
+        See `docs/decisions.md` (2026-07-13) and OQ #4 (corrected 2026-07-14).
 - [ ] **LLM escalation** — escalated records only → Lyzr → plain-English summary + cross-field
       contradiction detection (NOT re-validation). Test on fixtures only (credit budget)
 - [ ] **Postgres swap + Render deploy** — same SQLAlchemy Core code, switch DB URL (gated by OQ#3)

@@ -43,10 +43,12 @@ New up top; resolved → bottom.
   cannot do this — it's a judgment over two models' disagreement. Deferred for the Jul-17 window.
 
 ## Budget / limits
-- Lyzr credits: <track usage here> / **2,000 per month (Starter, $19 — upgraded 2026-07-13).**
-  A batch run is ~2 credits (array-in/array-out, ≤2 calls), so ~1,000 runs/mo. The old 20/mo free
-  tier allowed ~10 runs *total* — that scarcity is why record/replay + the ledger exist. **Keep both:
-  they are engineering artifacts, not credit workarounds.** See `docs/decisions.md` (2026-07-13).
+- Lyzr credits: **FREE tier, 20/month, resets Aug 11 — Starter was never purchased** (corrected
+  2026-07-14; buy only if needed — see open-questions #6). ~14.8 left after the first live runs
+  (~5.2 used: Phase-1 tests + one stray call + the two Task-12 batch runs). A batch run is
+  ~2 credits regardless of record count (one message per specialist), so Task 13 at N=5 runs ≈ 10
+  credits. That scarcity is why record/replay + the ledger exist. **Keep both: they are engineering
+  artifacts, not credit workarounds.** See `docs/decisions.md` (2026-07-13).
 
 ## Resolved
 _(move here as items close, with date)_
