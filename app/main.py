@@ -22,6 +22,7 @@ from fastapi.responses import JSONResponse
 from app.validator import get_validator
 from app.router import route
 from app.store import ensure_tables, save_report, get_stats
+from app.agents.ledger import BudgetExceeded, LedgerError
 
 ENGINE = os.environ.get("EHR_ENGINE", "local")  # 'local' or 'lyzr'
 
@@ -36,6 +37,15 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="EHR Data Quality Triage", version="1.0", lifespan=lifespan)
 
 
+@app.exception_handler(LedgerError)
+def ledger_refused(request, exc):
+    """A ledger refusal is the spend gate WORKING, not a crash. Served as a bare 500 it
+    reads as a broken server, and the actionable message ("raise LYZR_CREDIT_BUDGET only
+    if the credits are real") dies in a stderr traceback nobody is watching."""
+    status = 429 if isinstance(exc, BudgetExceeded) else 503
+    return JSONResponse(status_code=status, content={"detail": str(exc)})
+
+
 @app.get("/health")
 def health():
     return {"status": "ok", "engine": ENGINE}
@@ -43,6 +53,8 @@ def health():
 
 @app.post("/validate")
 def validate(payload: dict):
+    # No spend gate here, on purpose: LyzrValidator.validate charges the ledger itself,
+    # so EVERY caller — this endpoint, load_results.py, anything — is gated identically.
     validator = get_validator(ENGINE)
     report = validator.validate(payload)
 

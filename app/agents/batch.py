@@ -27,6 +27,7 @@ is never marked down on a field we were going to overwrite anyway.
 """
 import os
 import re
+from datetime import datetime
 
 from app import store
 from app.agents._fileio import exclusive_lock
@@ -86,11 +87,21 @@ def run_nightly_batch(batch_date, *, mode="replay", recordings_dir, agent_id=Non
 
 
 def _run_batch(batch_date, mode, recordings_dir, agent_id, ledger, active):
+    # Two checks, both needed: the regex rejects unpadded forms strptime would accept
+    # ("2026-7-13"), strptime rejects impossible dates the regex would accept
+    # ("2026-13-01", "2026-02-30"). Same reason the ledger validates its month key.
     if not BATCH_DATE.match(str(batch_date)):
         raise ValueError(
             f"batch_date must be YYYY-MM-DD, got {batch_date!r}. Refusing to file findings "
             f"under a key nothing will query."
         )
+    try:
+        datetime.strptime(str(batch_date), "%Y-%m-%d")
+    except ValueError:
+        raise ValueError(
+            f"batch_date {batch_date!r} is not a real calendar date. Refusing to file "
+            f"findings under a key nothing will query."
+        ) from None
 
     records = store.get_noted_records()
     if not records:

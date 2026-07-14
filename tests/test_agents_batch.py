@@ -25,7 +25,7 @@ import pytest
 from app.agents.batch import BatchAborted, run_nightly_batch
 from app.agents.specialists import SPECIALISTS, build_message
 from app.agents.transport import record_response
-from tests.conftest import record_reply
+from tests.conftest import record_reply, save_noted_record
 
 NOTE = "62-year-old gentleman with history of BPH, here for follow-up. Afebrile, comfortable."
 
@@ -54,17 +54,9 @@ HALLUCINATED = {
 }
 
 
-def save_noted_record(store, payload=None):
-    payload = payload or PAYLOAD
-    return store.save_report(
-        {"payload_id": payload["encounter"]["encounter_id"], "encounter_date": None,
-         "status": "pass", "issue_count": 0, "issues": []},
-        model="local", payload=payload)
-
-
 def setup_batch(store, tmp_path, identity=(), clinical=(), payload=None):
     """One noted record in the store, and a recorded reply from each specialist."""
-    run_id = save_noted_record(store, payload)
+    run_id = save_noted_record(store, payload or PAYLOAD)
     records = store.get_noted_records()
     recordings = str(tmp_path / "recordings")
     record_reply(recordings, records, "identity", list(identity))
@@ -182,7 +174,7 @@ def test_a_malformed_batch_date_is_refused_before_anything_is_written(fresh_stor
     nobody will ever look — and the records are stamped, so they never come back."""
     _, recordings = setup_batch(fresh_store, tmp_path, identity=[GROUNDED])
 
-    for bad in ("2026-7-13", "13-07-2026", "yesterday", ""):
+    for bad in ("2026-7-13", "13-07-2026", "yesterday", "", "2026-13-01", "2026-02-30"):
         with pytest.raises(ValueError):
             run_nightly_batch(bad, mode="replay", recordings_dir=recordings)
 
@@ -196,7 +188,7 @@ def test_an_unreadable_reply_aborts_the_batch_and_writes_nothing(fresh_store, tm
     anyway, those records leave the inbox with only HALF a review — permanently, and
     silently. Better to write nothing and let a retry re-ask."""
     store = fresh_store
-    save_noted_record(store)
+    save_noted_record(store, PAYLOAD)
     records = store.get_noted_records()
     recordings = str(tmp_path / "recordings")
     record_reply(recordings, records, "identity", [GROUNDED])
@@ -217,7 +209,7 @@ def test_an_unreadable_reply_does_not_wedge_replay_forever(fresh_store, tmp_path
     again — the pipeline is permanently stuck and nothing says why. The batch must quarantine
     the recording it could not parse, and say so."""
     store = fresh_store
-    save_noted_record(store)
+    save_noted_record(store, PAYLOAD)
     records = store.get_noted_records()
     recordings = str(tmp_path / "recordings")
     record_reply(recordings, records, "identity", [GROUNDED])
@@ -239,7 +231,7 @@ def test_an_aborted_live_run_reports_what_it_spent(fresh_store, tmp_path, monkey
     from app.agents.ledger import CreditLedger
 
     store = fresh_store
-    save_noted_record(store)
+    save_noted_record(store, PAYLOAD)
     records = store.get_noted_records()
     recordings = str(tmp_path / "recordings")
     ledger = CreditLedger(str(tmp_path / "l.json"), budget=10, month="2026-07")
@@ -260,7 +252,7 @@ def test_an_aborted_live_run_reports_what_it_spent(fresh_store, tmp_path, monkey
 
 
 def test_a_missing_recording_aborts_the_batch_and_writes_nothing(fresh_store, tmp_path):
-    save_noted_record(fresh_store)
+    save_noted_record(fresh_store, PAYLOAD)
 
     with pytest.raises(FileNotFoundError):
         run_nightly_batch("2026-07-13", mode="replay",

@@ -40,6 +40,14 @@ def fresh_store(tmp_path, monkeypatch):
     importlib.reload(store)
 
 
+def save_noted_record(store, payload):
+    """Persist a rules-clean report carrying `payload` — how records enter the agent inbox."""
+    return store.save_report(
+        {"payload_id": payload["encounter"]["encounter_id"], "encounter_date": None,
+         "status": "pass", "issue_count": 0, "issues": []},
+        model="local", payload=payload)
+
+
 def record_reply(recordings_dir, records, specialist_name, findings):
     """Record what `specialist_name` would say about exactly these records.
 

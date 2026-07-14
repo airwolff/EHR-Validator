@@ -33,6 +33,17 @@ DEFAULT_MONTHLY_BUDGET = 15
 
 BUDGET_ENV_VAR = "LYZR_CREDIT_BUDGET"
 
+# Repo root, anchored — a CWD-relative default would let the API and the CLI, started from
+# different directories, each keep their own ledger and each grant a full budget.
+_DEFAULT_LEDGER_PATH = os.path.join(os.path.dirname(__file__), "..", "..", ".lyzr_ledger.json")
+
+
+def ledger_path():
+    """Where the ledger lives. Overridable for the same reason as transport.recordings_dir():
+    on Render the package's filesystem is wiped on deploy, and a wiped ledger reads as
+    'nothing spent'."""
+    return os.environ.get("LYZR_LEDGER_PATH", _DEFAULT_LEDGER_PATH)
+
 
 class LedgerError(RuntimeError):
     """Base for every reason a live call must not happen. Callers gate on this."""

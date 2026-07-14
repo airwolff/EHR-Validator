@@ -22,6 +22,8 @@ try:
 except ImportError:
     pass
 
+from app.agents.transport import call_lyzr_live
+
 # --- format patterns ---------------------------------------------------------
 ICD10 = re.compile(r"^[A-Z][0-9]{2}(\.[A-Z0-9]{1,4})?$")
 CPT = re.compile(r"^[0-9]{5}$")
@@ -224,22 +226,26 @@ class LocalValidator:
 
 
 class LyzrValidator:
-    """Calls the deployed Lyzr agent via the v3 inference chat API.
+    """Calls the deployed Lyzr agent via transport.call_lyzr_live.
 
     Configure via environment variables before use:
       LYZR_API_KEY   - the x-api-key value from the Deploy tab
       LYZR_AGENT_ID  - the agent_id from the Deploy tab
       LYZR_USER_ID   - your Lyzr account email
       LYZR_AGENT_URL - optional; defaults to the standard v3 endpoint
+
+    Every call spends a real credit, and the spend is charged HERE, inside validate() —
+    not in any particular caller — so there is no way to construct this class that skips
+    the ledger. The bulk loader (`load_results.py --engine lyzr`) was exactly that bypass:
+    one un-metered live call per record of encounters.jsonl. Ordering follows transport's
+    rule: free config checks first (a refusal costs nothing), then the charge, then the
+    network — charging after the call would let a runaway loop outrun the cap.
     """
     name = "lyzr-agent"
-    DEFAULT_URL = "https://agent-prod.studio.lyzr.ai/v3/inference/chat/"
 
     def __init__(self):
-        self.endpoint = os.environ.get("LYZR_AGENT_URL", self.DEFAULT_URL)
         self.api_key = os.environ.get("LYZR_API_KEY")
         self.agent_id = os.environ.get("LYZR_AGENT_ID")
-        self.user_id = os.environ.get("LYZR_USER_ID", "default_user")
 
     def validate(self, payload: dict) -> dict:
         if not self.api_key or not self.agent_id:
@@ -249,35 +255,13 @@ class LyzrValidator:
                 "Until then use the local validator."
             )
         import json
-        import uuid
-        import urllib.request
 
-        body = json.dumps({
-            "user_id": self.user_id,
-            "agent_id": self.agent_id,
-            "session_id": f"{self.agent_id}-{uuid.uuid4()}",
-            "message": json.dumps(payload),   # the record itself is the message
-        }).encode()
+        from app.agents.ledger import CreditLedger, ledger_path
 
-        req = urllib.request.Request(
-            self.endpoint, data=body,
-            headers={
-                "Content-Type": "application/json",
-                "accept": "application/json",
-                "x-api-key": self.api_key,
-            },
-        )
-        with urllib.request.urlopen(req) as resp:
-            raw = json.loads(resp.read().decode())
-
-        # The agent's reply lives under one of these keys depending on API version.
-        text = None
-        for key in ("agent_response", "response", "message", "answer"):
-            if isinstance(raw, dict) and key in raw:
-                text = raw[key]
-                break
-        if text is None:
-            text = raw  # already the payload, or unexpected shape
+        CreditLedger(ledger_path()).spend(1)
+        # transport owns the network leg: timeout, key-scrubbed errors, and the
+        # response-key unwrapping — one Lyzr transport, not two drifting copies.
+        text = call_lyzr_live(self.agent_id, json.dumps(payload))
 
         # The reply is the triage report as a JSON string; parse it.
         if isinstance(text, str):
