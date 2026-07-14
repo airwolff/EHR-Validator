@@ -41,6 +41,12 @@ _CONTRACT = (
     '{"findings":[{"record_id","domain","field","problem","severity","adjudication",'
     '"evidence","confidence","remediation","owner"}]}. '
     'Every field is required and none may be empty. '
+    # Added after the first live run: the identity agent wrote ("gentleman") — raw double
+    # quotes inside a string value — and the whole reply failed json parsing. Deterministic
+    # model, deterministic failure: without this line it breaks identically every run.
+    'Your reply must parse as JSON: never put an unescaped double-quote inside a string '
+    'value — escape it as \\" or use single quotes around quoted words. A reply that '
+    'fails JSON parsing is discarded entirely. '
     f'"record_id" — copy it EXACTLY from the record the finding is about. A finding whose '
     f'record_id was not in the records below is discarded. '
     f'"domain" — exactly one of: {_DOMAINS}. No other value is accepted. '

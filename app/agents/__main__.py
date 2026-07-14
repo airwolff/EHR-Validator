@@ -10,7 +10,16 @@ import argparse
 import json
 import os
 
-from app.agents.batch import run_nightly_batch
+# The CLI is run from a plain shell, so it loads .env itself (same pattern as
+# app/validator.py). Without this, LYZR_API_KEY/LYZR_BATCH_AGENT_ID only exist
+# if the operator remembered to export them.
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
+from app.agents.batch import BatchAborted, run_nightly_batch
 from app.agents.ledger import CreditLedger, LedgerError, ledger_path
 from app.agents.transport import TransportError, recordings_dir
 
@@ -37,12 +46,18 @@ def main(argv=None):
             args.date,
             mode=args.mode,
             recordings_dir=args.recordings,
-            agent_id=os.environ.get("LYZR_AGENT_ID"),
+            # The batch's agent is a plain instruction-follower (the specialist prompt
+            # rides inside each message). LYZR_AGENT_ID — the Phase-1 validator agent,
+            # which has its own baked-in instructions — is only the fallback so a
+            # single-agent setup still runs.
+            agent_id=(os.environ.get("LYZR_BATCH_AGENT_ID")
+                      or os.environ.get("LYZR_AGENT_ID")),
             ledger=ledger,
         )
-    except (LedgerError, TransportError, ValueError) as exc:
-        # Deliberate refusals (budget, credentials, malformed date/budget), not crashes.
-        # In a cron log a one-line refusal and a traceback are very different mornings.
+    except (BatchAborted, LedgerError, TransportError, ValueError) as exc:
+        # Deliberate refusals (unreadable reply, budget, credentials, malformed date),
+        # not crashes. In a cron log a one-line refusal and a traceback are very
+        # different mornings. BatchAborted's message already says what to do next.
         raise SystemExit(f"batch refused: {exc}") from exc
     print(json.dumps(result, indent=2))
 
