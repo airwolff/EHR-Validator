@@ -84,6 +84,35 @@ agent_findings = Table(
     Column("owner",        String),
 )
 
+# Task 13: the rules-vs-LLM experiment. One row per try in comparison_runs; one row per
+# grade in comparison_results. Kept separate from validation_issues / agent_findings for
+# the same reason those two are separate: at demo time each engine's output is its own
+# table, and the comparison is a JOIN, not an untangling.
+comparison_runs = Table(
+    "comparison_runs", metadata,
+    Column("comparison_run_id", Integer, primary_key=True, autoincrement=True),
+    Column("run_number",       Integer, nullable=False),   # try 1..5
+    Column("mode",             String,  nullable=False),   # live | replay
+    Column("ran_at",           String,  nullable=False),
+    Column("permutation",      Text,    nullable=False),   # record ids, comma-joined, order sent
+    Column("usable",           Integer, nullable=False, default=1),  # 0 = reply unreadable
+    # Findings too malformed to grade (bad severity, unknown record id). Counted, never
+    # silently discarded — same rule as the batch's dropped findings.
+    Column("dropped_findings", Integer, nullable=False, default=0),
+)
+
+comparison_results = Table(
+    "comparison_results", metadata,
+    Column("result_id",         Integer, primary_key=True, autoincrement=True),
+    Column("comparison_run_id", Integer, nullable=False),
+    Column("record_id",         String,  nullable=False),
+    Column("field",             String,  nullable=False),
+    Column("rule_severity",     String),  # NULL on false_alarm — the rules said nothing here
+    Column("llm_severity",      String),  # NULL on missed — the AI said nothing here
+    Column("outcome",           String,  nullable=False),
+    # outcome: caught | severity_mismatch | missed | false_alarm
+)
+
 # Worklist precedence. Deliberately separate from router.DOMAIN_PRIORITY: that one picks
 # a record's primary domain, this one sorts a human's queue.
 # Every domain router.py can emit must appear here. A domain missing from this map sorts
@@ -209,6 +238,52 @@ def record_agent_result(run_id, findings, batch_date):
             f"never marked processed"
         )
     return len(findings)
+
+
+def save_comparison_run(run_number, mode, permutation, usable, results, dropped_findings=0):
+    """Save one graded try of the rules-vs-LLM experiment. Returns comparison_run_id.
+
+    Delete-then-insert in ONE transaction: re-grading the same try (same run_number and
+    mode) REPLACES its old rows. Recordings are the experiment's source of truth, so a
+    re-grade is routine — but if each re-grade appended rows, 'missed in X of N runs'
+    would quietly count the same try twice. A live try and a replay re-grade are
+    deliberately different identities (mode is part of the key).
+    """
+    now = _utc_now()
+    with engine.begin() as conn:
+        old = conn.execute(
+            comparison_runs.select().where(
+                (comparison_runs.c.run_number == run_number)
+                & (comparison_runs.c.mode == mode))
+        ).mappings().all()
+        old_ids = [r["comparison_run_id"] for r in old]
+        if old_ids:
+            conn.execute(comparison_results.delete().where(
+                comparison_results.c.comparison_run_id.in_(old_ids)))
+            conn.execute(comparison_runs.delete().where(
+                comparison_runs.c.comparison_run_id.in_(old_ids)))
+        cid = conn.execute(
+            comparison_runs.insert().values(
+                run_number=run_number,
+                mode=mode,
+                ran_at=now,
+                permutation=",".join(permutation),
+                usable=1 if usable else 0,
+                dropped_findings=dropped_findings,
+            )
+        ).inserted_primary_key[0]
+        for r in results:
+            conn.execute(
+                comparison_results.insert().values(
+                    comparison_run_id=cid,
+                    record_id=r["record_id"],
+                    field=r["field"],
+                    rule_severity=r.get("rule_severity"),
+                    llm_severity=r.get("llm_severity"),
+                    outcome=r["outcome"],
+                )
+            )
+    return cid
 
 
 def get_noted_records():
