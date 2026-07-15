@@ -39,3 +39,6 @@ def test_cli_caps_runs_at_the_permutation_count(fresh_store, tmp_path):
         compare.main(["--runs", "6", "--mode", "replay",
                       "--recordings", str(tmp_path / "empty")])
     assert "comparison refused" in str(exc.value)
+    # Pin the CAP refusal specifically — an empty recordings dir also refuses, and
+    # without this line the test passes even with the pre-loop guard deleted.
+    assert "1..5, got 6" in str(exc.value)
