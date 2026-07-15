@@ -131,8 +131,14 @@ def answer_key(payloads):
     key = {}
     for rid, payload in payloads.items():
         issues = {}
-        for issue in validator.validate(payload)["issues"]:
+        raw_issues = validator.validate(payload)["issues"]
+        for issue in raw_issues:
             issues[_norm_field(issue["field"])] = issue
+        if len(raw_issues) != len(issues):
+            raise ValueError(
+                f"answer_key collision for record {rid!r}: {len(raw_issues)} rule issues "
+                f"normalized down to {len(issues)} fields — two distinct field paths "
+                f"folded together by _norm_field, silently dropping an issue")
         key[rid] = issues
     return key
 
@@ -208,7 +214,7 @@ def tally(results):
 # is a DATA POINT ("bought 5 tries, 1 unusable") — the experiment must survive it.
 # ---------------------------------------------------------------------------
 from app.agents.specialists import ResponseUnparseable, parse_findings
-from app.agents.transport import get_response, quarantine_recording
+from app.agents.transport import get_response, quarantine_recording, recording_path
 
 
 def run_comparison(runs, mode, recordings_dir, agent_id=None, ledger=None,
@@ -236,9 +242,28 @@ def run_comparison(runs, mode, recordings_dir, agent_id=None, ledger=None,
                       "missed": 0, "false_alarm": 0}}
     for run_number in range(1, runs + 1):
         message = build_comparison_message(run_number, payloads)
-        raw = get_response(SPECIALIST_NAME, message, mode=mode,
-                           recordings_dir=recordings_dir,
-                           agent_id=agent_id, ledger=ledger)
+        try:
+            raw = get_response(SPECIALIST_NAME, message, mode=mode,
+                               recordings_dir=recordings_dir,
+                               agent_id=agent_id, ledger=ledger)
+        except FileNotFoundError:
+            # Replay only: a QUARANTINED recording (a ".rejected" sidecar file) means we
+            # already paid for this try once, got junk, and marked it unusable — replaying
+            # the experiment must not crash on a fact we already know. Treat it exactly like
+            # an unusable reply again. A genuinely MISSING recording (no ".rejected" file
+            # either) is a different thing entirely — a question never asked — and must
+            # still refuse loudly, so re-raise.
+            if mode == "replay" and os.path.exists(
+                    recording_path(recordings_dir, SPECIALIST_NAME, message) + ".rejected"):
+                error = (f"recording quarantined: "
+                        f"{os.path.basename(recording_path(recordings_dir, SPECIALIST_NAME, message))}.rejected")
+                store.save_comparison_run(run_number, mode, run_order(run_number),
+                                          usable=False, results=[])
+                out["runs"].append({"run_number": run_number, "usable": False,
+                                    "error": error})
+                out["unusable_runs"] += 1
+                continue
+            raise
         try:
             findings = parse_findings(raw)
         except ResponseUnparseable as exc:

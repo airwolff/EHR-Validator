@@ -97,6 +97,37 @@ def test_missing_recording_stops_with_filenotfound(fresh_store, tmp_path):
                                recordings_dir=str(tmp_path / "empty"))
 
 
+def test_quarantined_recording_replays_as_unusable_not_crash(fresh_store, tmp_path, payloads):
+    """A junk reply we already paid for gets quarantined once; replaying the whole
+    experiment afterwards must keep reporting it unusable, not raise FileNotFoundError
+    (the recording is gone — renamed to .rejected — after the first quarantine)."""
+    rec = str(tmp_path / "recordings")
+    message = compare.build_comparison_message(1, payloads)
+    record_response(rec, compare.SPECIALIST_NAME, message,
+                    "I'm sorry, I can't help with these records.")
+
+    first = compare.run_comparison(1, mode="replay", recordings_dir=rec)
+    assert first["runs"][0]["usable"] is False
+    assert first["unusable_runs"] == 1
+
+    bad_path = recording_path(rec, compare.SPECIALIST_NAME, message)
+    assert not os.path.exists(bad_path)
+    assert os.path.exists(bad_path + ".rejected")
+
+    second = compare.run_comparison(1, mode="replay", recordings_dir=rec)
+    assert second["runs"][0]["usable"] is False
+    assert second["unusable_runs"] == 1
+    assert "quarantined" in second["runs"][0]["error"]
+
+    from sqlalchemy import text
+    with fresh_store.engine.connect() as conn:
+        runs = conn.execute(text(
+            "SELECT * FROM comparison_runs WHERE run_number = 1 AND mode = 'replay'"
+        )).mappings().all()
+    assert len(runs) == 1
+    assert runs[0]["usable"] == 0
+
+
 def test_dropped_junk_findings_are_counted_on_the_run_row(fresh_store, tmp_path, payloads):
     rec = str(tmp_path / "recordings")
     record_compare_reply(rec, 1, payloads, [

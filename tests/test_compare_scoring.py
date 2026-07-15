@@ -83,6 +83,25 @@ def test_junk_findings_are_dropped_and_counted_not_graded():
     assert len(dropped) == 4
 
 
+def test_answer_key_raises_on_normalized_field_collision(monkeypatch, payload_loader):
+    """Two distinct rule issues whose field paths fold to the same normalized key would
+    silently drop one of them (dict overwrite) — the collision must raise, not vanish."""
+    from app.validator import LocalValidator
+
+    def fake_validate(self, payload):
+        return {"issues": [
+            {"field": "diagnoses[0].code", "problem": "bad code",
+             "severity": "critical", "remediation": "fix"},
+            {"field": "diagnoses.0.code", "problem": "also bad, different rule",
+             "severity": "warning", "remediation": "fix"},
+        ]}
+
+    monkeypatch.setattr(LocalValidator, "validate", fake_validate)
+    payloads = {"payload_clean": payload_loader("payload_clean.json")}
+    with pytest.raises(ValueError, match="answer_key collision"):
+        compare.answer_key(payloads)
+
+
 def test_duplicate_findings_on_one_field_grade_once(key):
     """Two findings on the same field must not double-count: if EITHER has the right
     severity the problem was caught."""
