@@ -5,6 +5,14 @@ New up top; resolved → bottom.
 
 ## Presentation arguments to protect (don't let refactors erode these)
 - Deterministic-first: rules are the trusted baseline; LLM only for what rules can't reach.
+- **The thesis has TWO halves — present both, or it reads as "AI sucks."** Half 1, the LLM wins
+  (live-proven 2026-07-14): the wow record (`payload_wrong_patient_note`) passes **every** Python
+  rule — zero issues — but its note describes a different person; both specialists caught it,
+  **4 grounded critical findings**, the clean record cleared, nothing fabricated, and the run
+  replays offline for free on stage. Half 2, Python wins (Task 13): the same 5 fixtures carry 15
+  rule-caught problems, and the miss rate measures what paying the LLM to do a rule's job costs
+  in silent misses. Together: "I gave each job to the tool that's good at it" — engineering
+  judgment, not AI cheerleading or AI bashing.
 - The Lyzr **temp 71.2°F miss** is the headline evidence — keep it visible, don't tune it away.
   (A pytest regression guard is planned to lock this behavior in.)
 - Severity = plausibility of the datum, not patient survivability.
