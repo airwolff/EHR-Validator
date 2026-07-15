@@ -103,8 +103,11 @@ ORDER BY encounter_date;
 -- ---------------------------------------------------------------------------
 -- Q8. THE THESIS NUMBER: per known problem, how many of the N usable tries
 -- did the LLM miss it in? ("The agent missed the SpO2 critical in X of N.")
+-- Counts are per mode -- a live run and its replay re-grade appear as
+-- separate sections, which is the reproducibility story, not double-counting.
 -- ---------------------------------------------------------------------------
 SELECT
+    cr.mode,
     res.record_id,
     res.field,
     res.rule_severity,
@@ -115,8 +118,8 @@ FROM comparison_results res
 JOIN comparison_runs cr ON cr.comparison_run_id = res.comparison_run_id
 WHERE cr.usable = 1
   AND res.outcome IN ('caught', 'severity_mismatch', 'missed')
-GROUP BY res.record_id, res.field, res.rule_severity
-ORDER BY times_missed DESC, times_misgraded DESC, res.record_id, res.field;
+GROUP BY cr.mode, res.record_id, res.field, res.rule_severity
+ORDER BY cr.mode, times_missed DESC, times_misgraded DESC, res.record_id, res.field;
 
 -- ---------------------------------------------------------------------------
 -- Q9. Per-try scorecard: caught / misgraded / missed / false alarms / junk.
@@ -132,14 +135,19 @@ SELECT
     cr.dropped_findings                                                AS junk_findings
 FROM comparison_runs cr
 LEFT JOIN comparison_results res ON res.comparison_run_id = cr.comparison_run_id
+-- comparison_run_id is the PK, so the other cr.* columns are functionally
+-- dependent -- legal in SQLite and Postgres
 GROUP BY cr.comparison_run_id
 ORDER BY cr.mode, cr.run_number;
 
 -- ---------------------------------------------------------------------------
 -- Q10. Severity confusion: where the LLM found the problem but graded it
 -- differently than the rules did.
+-- Counts are per mode -- a live run and its replay re-grade appear as
+-- separate sections, which is the reproducibility story, not double-counting.
 -- ---------------------------------------------------------------------------
 SELECT
+    cr.mode,
     res.rule_severity,
     res.llm_severity,
     COUNT(*)                                                           AS occurrences
@@ -148,8 +156,8 @@ JOIN comparison_runs cr ON cr.comparison_run_id = res.comparison_run_id
 WHERE cr.usable = 1
   AND res.rule_severity IS NOT NULL
   AND res.llm_severity IS NOT NULL
-GROUP BY res.rule_severity, res.llm_severity
-ORDER BY res.rule_severity, res.llm_severity;
+GROUP BY cr.mode, res.rule_severity, res.llm_severity
+ORDER BY cr.mode, res.rule_severity, res.llm_severity;
 
 -- ---------------------------------------------------------------------------
 -- Q11. Reliability of the channel itself: how many tries were bought vs usable.
