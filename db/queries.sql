@@ -99,3 +99,65 @@ FROM validation_runs
 WHERE encounter_date LIKE '____-__-__'
 GROUP BY encounter_date
 ORDER BY encounter_date;
+
+-- ---------------------------------------------------------------------------
+-- Q8. THE THESIS NUMBER: per known problem, how many of the N usable tries
+-- did the LLM miss it in? ("The agent missed the SpO2 critical in X of N.")
+-- ---------------------------------------------------------------------------
+SELECT
+    res.record_id,
+    res.field,
+    res.rule_severity,
+    SUM(CASE WHEN res.outcome = 'missed' THEN 1 ELSE 0 END)           AS times_missed,
+    SUM(CASE WHEN res.outcome = 'severity_mismatch' THEN 1 ELSE 0 END) AS times_misgraded,
+    COUNT(*)                                                           AS usable_tries
+FROM comparison_results res
+JOIN comparison_runs cr ON cr.comparison_run_id = res.comparison_run_id
+WHERE cr.usable = 1
+  AND res.outcome IN ('caught', 'severity_mismatch', 'missed')
+GROUP BY res.record_id, res.field, res.rule_severity
+ORDER BY times_missed DESC, times_misgraded DESC, res.record_id, res.field;
+
+-- ---------------------------------------------------------------------------
+-- Q9. Per-try scorecard: caught / misgraded / missed / false alarms / junk.
+-- ---------------------------------------------------------------------------
+SELECT
+    cr.run_number,
+    cr.mode,
+    cr.usable,
+    SUM(CASE WHEN res.outcome = 'caught' THEN 1 ELSE 0 END)            AS caught,
+    SUM(CASE WHEN res.outcome = 'severity_mismatch' THEN 1 ELSE 0 END) AS misgraded,
+    SUM(CASE WHEN res.outcome = 'missed' THEN 1 ELSE 0 END)            AS missed,
+    SUM(CASE WHEN res.outcome = 'false_alarm' THEN 1 ELSE 0 END)       AS false_alarms,
+    cr.dropped_findings                                                AS junk_findings
+FROM comparison_runs cr
+LEFT JOIN comparison_results res ON res.comparison_run_id = cr.comparison_run_id
+GROUP BY cr.comparison_run_id
+ORDER BY cr.mode, cr.run_number;
+
+-- ---------------------------------------------------------------------------
+-- Q10. Severity confusion: where the LLM found the problem but graded it
+-- differently than the rules did.
+-- ---------------------------------------------------------------------------
+SELECT
+    res.rule_severity,
+    res.llm_severity,
+    COUNT(*)                                                           AS occurrences
+FROM comparison_results res
+JOIN comparison_runs cr ON cr.comparison_run_id = res.comparison_run_id
+WHERE cr.usable = 1
+  AND res.rule_severity IS NOT NULL
+  AND res.llm_severity IS NOT NULL
+GROUP BY res.rule_severity, res.llm_severity
+ORDER BY res.rule_severity, res.llm_severity;
+
+-- ---------------------------------------------------------------------------
+-- Q11. Reliability of the channel itself: how many tries were bought vs usable.
+-- ---------------------------------------------------------------------------
+SELECT
+    mode,
+    COUNT(*)                                                           AS tries_bought,
+    SUM(CASE WHEN usable = 1 THEN 1 ELSE 0 END)                        AS tries_usable,
+    SUM(CASE WHEN usable = 0 THEN 1 ELSE 0 END)                        AS tries_unusable
+FROM comparison_runs
+GROUP BY mode;
