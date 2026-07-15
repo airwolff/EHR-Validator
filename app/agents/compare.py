@@ -263,3 +263,62 @@ def run_comparison(runs, mode, recordings_dir, agent_id=None, ledger=None,
                             "counts": counts, "dropped_findings": len(dropped)})
         out["usable_runs"] += 1
     return out
+
+
+# ---------------------------------------------------------------------------
+# CLI: python -m app.agents.compare --runs 5 --mode replay|live
+# Same manners as the batch CLI (app/agents/__main__.py): loads .env itself,
+# one-line refusals, JSON result on stdout.
+# ---------------------------------------------------------------------------
+
+
+def main(argv=None):
+    import argparse
+
+    try:
+        from dotenv import load_dotenv
+        load_dotenv()
+    except ImportError:
+        pass
+
+    from app import store
+    from app.agents.ledger import CreditLedger, LedgerError, ledger_path
+    from app.agents.transport import TransportError, recordings_dir
+
+    parser = argparse.ArgumentParser(
+        prog="python -m app.agents.compare",
+        description="Rules-vs-LLM comparison: N tries over the 5 canonical fixtures, "
+                    "graded against LocalValidator.")
+    parser.add_argument("--runs", type=int, default=5,
+                        help="How many tries, 1..5 (default: %(default)s). "
+                             "Each try is ~1 credit in live mode.")
+    parser.add_argument("--mode", choices=["replay", "live"], default="replay",
+                        help="replay = saved answers, free (default). "
+                             "live = real Lyzr calls; spends credits, saves the replies.")
+    parser.add_argument("--recordings", default=recordings_dir(),
+                        help="Recordings directory (default: %(default)s).")
+    parser.add_argument("--payload-dir", default=DEFAULT_PAYLOAD_DIR,
+                        help="Where the 5 canonical fixtures live (default: %(default)s).")
+    args = parser.parse_args(argv)
+
+    try:
+        store.ensure_tables()  # new tables appear on demand; existing data untouched
+        ledger = CreditLedger(ledger_path()) if args.mode == "live" else None
+        result = run_comparison(
+            args.runs,
+            mode=args.mode,
+            recordings_dir=args.recordings,
+            agent_id=(os.environ.get("LYZR_BATCH_AGENT_ID")
+                      or os.environ.get("LYZR_AGENT_ID")),
+            ledger=ledger,
+            payload_dir=args.payload_dir,
+        )
+    except (FileNotFoundError, LedgerError, TransportError, ValueError) as exc:
+        # Deliberate refusals (no recording, over budget, bad credentials, runs > 5) —
+        # one readable line, not a stack trace.
+        raise SystemExit(f"comparison refused: {exc}") from exc
+    print(json.dumps(result, indent=2))
+
+
+if __name__ == "__main__":
+    main()
