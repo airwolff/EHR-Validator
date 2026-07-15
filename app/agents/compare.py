@@ -103,3 +103,100 @@ def build_comparison_message(run_number, payloads):
         for rid in run_order(run_number)
     ]
     return _CONTRACT + "\n\nRECORDS:\n" + "\n".join(blocks)
+
+
+# ---------------------------------------------------------------------------
+# Grading. The rules are the answer key; code does the grading; nothing is a
+# judgment call. Four outcomes per the spec, one row each, DB-shaped.
+# ---------------------------------------------------------------------------
+
+# The comparison contract's required keys — narrower than the batch finding shape
+# (no evidence/adjudication/owner: there is no note to quote and no worklist to route).
+REQUIRED_COMPARISON_KEYS = {"record_id", "field", "problem", "severity", "remediation"}
+
+
+def _norm_field(path):
+    """Fold field-path spellings together: 'diagnoses[0].code' == 'diagnoses.0.code',
+    case- and space-insensitive. The AI re-spelling a path is formatting, not a miss —
+    grading it as a miss would inflate the exact number this experiment reports."""
+    return re.sub(r"\[(\d+)\]", r".\1", str(path or "")).replace(" ", "").lower()
+
+
+def answer_key(payloads):
+    """{record_id: {normalized_field: rule issue}} — computed FRESH from LocalValidator,
+    so a rule change updates the key instead of silently grading against a stale one."""
+    from app.validator import LocalValidator
+
+    validator = LocalValidator()
+    key = {}
+    for rid, payload in payloads.items():
+        issues = {}
+        for issue in validator.validate(payload)["issues"]:
+            issues[_norm_field(issue["field"])] = issue
+        key[rid] = issues
+    return key
+
+
+def partition_comparison_findings(findings, known_record_ids):
+    """(kept, dropped): a finding is gradable only if it is a dict with every required
+    key non-empty, a real severity, and a record_id that was actually in the batch.
+    Dropped findings are COUNTED (comparison_runs.dropped_findings) — the project rule:
+    nothing an AI returns disappears silently."""
+    kept, dropped = [], []
+    for f in findings or []:
+        ok = (
+            isinstance(f, dict)
+            and REQUIRED_COMPARISON_KEYS.issubset(f)
+            and all(str(f[k] or "").strip() for k in REQUIRED_COMPARISON_KEYS)
+            and f["severity"] in VALID_SEVERITIES
+            and f["record_id"] in known_record_ids
+        )
+        (kept if ok else dropped).append(f)
+    return kept, dropped
+
+
+def score_run(findings, key):
+    """Grade one try. Returns DB-shaped rows (see store.comparison_results).
+
+    Every answer-key problem gets exactly ONE row: caught (right field, right severity),
+    severity_mismatch (right field, wrong severity), or missed (the AI said nothing).
+    Whatever the AI reported beyond the key becomes false_alarm rows — including
+    anything at all on the clean record. Duplicate findings on one field grade once:
+    caught if ANY duplicate has the right severity."""
+    claims = {}
+    for f in findings:
+        claims.setdefault((f["record_id"], _norm_field(f["field"])), []).append(f)
+
+    rows = []
+    for rid in CANONICAL_RECORD_IDS:
+        for norm_field, issue in (key.get(rid) or {}).items():
+            matched = claims.pop((rid, norm_field), [])
+            if not matched:
+                outcome, llm_severity = "missed", None
+            elif any(c["severity"] == issue["severity"] for c in matched):
+                outcome, llm_severity = "caught", issue["severity"]
+            else:
+                outcome, llm_severity = "severity_mismatch", matched[0]["severity"]
+            rows.append({
+                "record_id": rid,
+                "field": issue["field"],          # the rules' spelling is canonical
+                "rule_severity": issue["severity"],
+                "llm_severity": llm_severity,
+                "outcome": outcome,
+            })
+    for (rid, _norm), extra in sorted(claims.items()):
+        rows.append({
+            "record_id": rid,
+            "field": extra[0]["field"],
+            "rule_severity": None,
+            "llm_severity": extra[0]["severity"],
+            "outcome": "false_alarm",
+        })
+    return rows
+
+
+def tally(results):
+    counts = {"caught": 0, "severity_mismatch": 0, "missed": 0, "false_alarm": 0}
+    for r in results:
+        counts[r["outcome"]] += 1
+    return counts
