@@ -200,3 +200,66 @@ def tally(results):
     for r in results:
         counts[r["outcome"]] += 1
     return counts
+
+
+# ---------------------------------------------------------------------------
+# The run loop. One deliberate difference from the nightly batch: there, an
+# unreadable reply ABORTS (a half-processed inbox is a wedged pipeline); here it
+# is a DATA POINT ("bought 5 tries, 1 unusable") — the experiment must survive it.
+# ---------------------------------------------------------------------------
+from app.agents.specialists import ResponseUnparseable, parse_findings
+from app.agents.transport import get_response, quarantine_recording
+
+
+def run_comparison(runs, mode, recordings_dir, agent_id=None, ledger=None,
+                   payload_dir=DEFAULT_PAYLOAD_DIR):
+    """Run the experiment: `runs` tries, each graded and written to the DB.
+
+    replay mode reads saved replies and costs nothing; live mode spends ~1 credit per
+    try through `ledger` (charged before the network call — transport's rule, do not
+    reorder). Returns the summary the CLI prints. Unusable tries are counted, their
+    recordings quarantined, and later tries still run.
+    """
+    from app import store
+
+    # Validate the try count BEFORE the loop: with runs=6 the loop would otherwise fail
+    # on try 1's missing recording (or worse, SPEND five credits) before ever reaching
+    # the invalid try 6. run_order() is the single owner of the 1..5 rule.
+    run_order(runs)
+
+    payloads = load_fixtures(payload_dir)
+    key = answer_key(payloads)
+    known = set(payloads)
+
+    out = {"runs": [], "usable_runs": 0, "unusable_runs": 0,
+           "totals": {"caught": 0, "severity_mismatch": 0,
+                      "missed": 0, "false_alarm": 0}}
+    for run_number in range(1, runs + 1):
+        message = build_comparison_message(run_number, payloads)
+        raw = get_response(SPECIALIST_NAME, message, mode=mode,
+                           recordings_dir=recordings_dir,
+                           agent_id=agent_id, ledger=ledger)
+        try:
+            findings = parse_findings(raw)
+        except ResponseUnparseable as exc:
+            # An honest recording of a junk answer must not replay as if it were real.
+            quarantine_recording(recordings_dir, SPECIALIST_NAME, message)
+            store.save_comparison_run(run_number, mode, run_order(run_number),
+                                      usable=False, results=[])
+            out["runs"].append({"run_number": run_number, "usable": False,
+                                "error": str(exc)})
+            out["unusable_runs"] += 1
+            continue
+
+        kept, dropped = partition_comparison_findings(findings, known)
+        results = score_run(kept, key)
+        store.save_comparison_run(run_number, mode, run_order(run_number),
+                                  usable=True, results=results,
+                                  dropped_findings=len(dropped))
+        counts = tally(results)
+        for outcome, n in counts.items():
+            out["totals"][outcome] += n
+        out["runs"].append({"run_number": run_number, "usable": True,
+                            "counts": counts, "dropped_findings": len(dropped)})
+        out["usable_runs"] += 1
+    return out

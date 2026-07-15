@@ -61,3 +61,14 @@ def record_reply(recordings_dir, records, specialist_name, findings):
     message = build_message(SPECIALISTS[specialist_name], records)
     record_response(recordings_dir, specialist_name, message,
                     json.dumps({"findings": findings}))
+
+
+def record_compare_reply(recordings_dir, run_number, payloads, findings):
+    """Record what the comparison agent would say for try `run_number` over `payloads`.
+    Same rule as record_reply: built from the REAL message builder, or it never replays."""
+    from app.agents.compare import SPECIALIST_NAME, build_comparison_message
+    from app.agents.transport import record_response
+
+    message = build_comparison_message(run_number, payloads)
+    record_response(recordings_dir, SPECIALIST_NAME, message,
+                    json.dumps({"findings": findings}))
