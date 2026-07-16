@@ -38,6 +38,30 @@ DEFAULT_URL = "https://agent-prod.studio.lyzr.ai/v3/inference/chat/"
 # the credit is already spent. Fail loudly instead.
 DEFAULT_TIMEOUT_SECONDS = 60
 
+TIMEOUT_ENV_VAR = "LYZR_TIMEOUT_SECONDS"
+
+
+def _timeout_seconds():
+    """How long to wait for Lyzr's answer. Overridable via LYZR_TIMEOUT_SECONDS.
+
+    Added after the first Task-13 live run: the comparison message (5 full records,
+    ~15 findings asked for) hit the hardcoded 60s and the credit was already spent —
+    a too-short timeout costs real money, so its length belongs in .env, not code.
+    A junk value refuses BEFORE the ledger is charged, same fail-closed rule as the
+    ledger's own budget parsing."""
+    raw = os.environ.get(TIMEOUT_ENV_VAR)
+    if raw is None or not raw.strip():
+        return DEFAULT_TIMEOUT_SECONDS
+    try:
+        timeout = float(raw)
+    except ValueError:
+        raise LiveCallRefused(
+            f"{TIMEOUT_ENV_VAR}={raw!r} is not a number. Refusing to guess a timeout."
+        ) from None
+    if timeout <= 0:
+        raise LiveCallRefused(f"{TIMEOUT_ENV_VAR}={raw!r} must be positive.")
+    return timeout
+
 _DEFAULT_RECORDINGS_DIR = os.path.join(os.path.dirname(__file__), "recordings")
 
 
@@ -166,7 +190,7 @@ def call_lyzr_live(agent_id, message):
     })
 
     try:
-        with urllib.request.urlopen(request, timeout=DEFAULT_TIMEOUT_SECONDS) as response:
+        with urllib.request.urlopen(request, timeout=_timeout_seconds()) as response:
             raw = json.loads(response.read().decode())
     except urllib.error.HTTPError as exc:
         # The status code is what tells you WHICH fix you need — 401 wrong key, 404 wrong
@@ -216,6 +240,9 @@ def get_response(specialist, message, *, mode, recordings_dir, agent_id=None, le
             )
         if not agent_id:
             raise LiveCallRefused("Live mode requires an agent_id (set LYZR_AGENT_ID).")
+        # Validate the timeout NOW, while refusing is still free — call_lyzr_live reads
+        # it again after the charge, and a typo'd .env value must not cost a credit.
+        _timeout_seconds()
 
         ledger.spend(1)  # raises BudgetExceeded, and then no call happens at all
         raw = call_lyzr_live(agent_id, message)

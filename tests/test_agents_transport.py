@@ -243,3 +243,39 @@ def test_the_api_key_never_appears_in_an_error_message(monkeypatch):
     with pytest.raises(Exception) as exc:
         transport.call_lyzr_live("agent-123", "chart A")
     assert "sk-secret-do-not-leak" not in str(exc.value)
+
+
+# ---------------------------------------------------------------------------
+# The timeout knob (added after the first Task-13 live run hit the hardcoded
+# 60s with the credit already spent — a too-short timeout costs real money).
+# ---------------------------------------------------------------------------
+
+def test_timeout_defaults_to_60_when_env_unset(monkeypatch):
+    monkeypatch.delenv(transport.TIMEOUT_ENV_VAR, raising=False)
+    assert transport._timeout_seconds() == transport.DEFAULT_TIMEOUT_SECONDS
+
+
+def test_timeout_env_override_is_used(monkeypatch):
+    monkeypatch.setenv(transport.TIMEOUT_ENV_VAR, "240")
+    assert transport._timeout_seconds() == 240.0
+
+
+def test_timeout_junk_or_nonpositive_refuses(monkeypatch):
+    for bad in ("abc", "0", "-5"):
+        monkeypatch.setenv(transport.TIMEOUT_ENV_VAR, bad)
+        with pytest.raises(LiveCallRefused):
+            transport._timeout_seconds()
+
+
+def test_live_mode_refuses_a_junk_timeout_before_spending(tmp_path, monkeypatch):
+    """A typo'd LYZR_TIMEOUT_SECONDS must cost nothing: the refusal fires with the
+    ledger untouched and the network never called."""
+    called = []
+    monkeypatch.setattr(transport, "call_lyzr_live", lambda *a, **k: called.append(1))
+    monkeypatch.setenv(transport.TIMEOUT_ENV_VAR, "not-a-number")
+    led = ledger(tmp_path)
+    with pytest.raises(LiveCallRefused):
+        get_response("clinical", "chart A", mode="live", recordings_dir=str(tmp_path),
+                     agent_id="agent-123", ledger=led)
+    assert called == []
+    assert led.spent() == 0
