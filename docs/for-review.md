@@ -9,12 +9,21 @@ New up top; resolved → bottom.
   (live-proven 2026-07-14): the wow record (`payload_wrong_patient_note`) passes **every** Python
   rule — zero issues — but its note describes a different person; both specialists caught it,
   **4 grounded critical findings**, the clean record cleared, nothing fabricated, and the run
-  replays offline for free on stage. Half 2, Python wins (Task 13): the same 5 fixtures carry 15
-  rule-caught problems, and the miss rate measures what paying the LLM to do a rule's job costs
-  in silent misses. Together: "I gave each job to the tool that's good at it" — engineering
-  judgment, not AI cheerleading or AI bashing.
-- The Lyzr **temp 71.2°F miss** is the headline evidence — keep it visible, don't tune it away.
-  (A pytest regression guard is planned to lock this behavior in.)
+  replays offline for free on stage. Half 2, Python wins (Task 13, **live-measured 2026-07-16**):
+  same 5 records, five tries, only the record order in the message changed — the rules returned the
+  identical 15/15 problems every try; the LLM gave **a different answer every try**: 1 silent miss
+  (the bad-timestamp warning, 1/5), 5 wrong severities (the missing facility NPI — a critical —
+  downgraded in 2/5; three others once each), and 11 invented problems, including one on the
+  certified-clean record. The slide sentence: *"I ran both engines over the same 5 records five
+  times. The rules: identical 15/15, every time. The AI: a different answer every time the record
+  order changed — 1 silent miss, 5 wrong severities, 11 invented problems, one of them on a
+  certified-clean record."* Together: "I gave each job to the tool that's good at it" — engineering
+  judgment, not AI cheerleading or AI bashing. The five recordings replay the whole run offline
+  (47d2868); the numbers come from SQL over the persisted grades (`db/queries.sql`).
+- The Lyzr **temp 71.2°F miss** is the Phase-1 anecdote that started the thesis — keep it visible,
+  don't tune it away. (A pytest regression guard is planned to lock this behavior in.) The
+  *measured* headline is now the Task-13 five-try result above; in that run the silent miss was
+  the bad-timestamp warning, not the temp — misses move around, which is itself the point.
 - Severity = plausibility of the datum, not patient survivability.
 - **"Multi-agent system with *deterministic orchestration*"** — the correct name for this
   architecture, and the answer to "is any of this actually agentic?" The recognized multi-agent shape
@@ -52,11 +61,12 @@ New up top; resolved → bottom.
 
 ## Budget / limits
 - Lyzr credits: **FREE tier, 20/month, resets Aug 11 — Starter was never purchased** (corrected
-  2026-07-14; buy only if needed — see open-questions #6). ~14.8 left after the first live runs
-  (~5.2 used: Phase-1 tests + one stray call + the two Task-12 batch runs). A batch run is
-  ~2 credits regardless of record count (one message per specialist), so Task 13 at N=5 runs ≈ 10
-  credits. That scarcity is why record/replay + the ledger exist. **Keep both: they are engineering
-  artifacts, not credit workarounds.** See `docs/decisions.md` (2026-07-13).
+  2026-07-14; buy only if needed — see open-questions #6). **≈8.8 left after Task 13** (2026-07-16:
+  5 credits for the five comparison tries — a comparison try is 1 credit, one message, cheaper than
+  the ~2/run estimate — plus 1 lost to the 60s timeout before the fix 549c2c1; ledger 10/15).
+  Starter never became necessary. That scarcity is why record/replay + the ledger exist. **Keep
+  both: they are engineering artifacts, not credit workarounds.** See `docs/decisions.md`
+  (2026-07-13, 2026-07-17).
 
 ## Resolved
 _(move here as items close, with date)_

@@ -42,6 +42,9 @@ a batch run costs ~2 credits **regardless of how many records are in it** (one m
 specialist), so N comparison runs ≈ 2×N credits — **N=5 runs fits in 10 credits** with ~5 spare.
 Buy Starter only if Task 13's design needs more than ~7 runs or prompt iteration goes badly.
 **Blocks:** nothing — Task 13 proceeds on the free tier with N sized accordingly.
+**Post-run note (2026-07-17):** Task 13 ran N=5 on the free tier; a comparison try turned out to be
+**1 credit** (one message), not 2, so the run cost 5 credits (+1 lost to a timeout). ≈8.8 left,
+ledger 10/15. Starter never needed.
 
 ---
 ## Resolved

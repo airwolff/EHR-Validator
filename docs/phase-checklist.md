@@ -101,13 +101,24 @@ Live tracker for the current phase. Tick a box only when **verified by running i
         (quarantined, committed as Task-13 evidence); `_CONTRACT` gained a JSON-escape rule; run 2
         produced 4 grounded critical findings on the wow record, clean record cleared, 0 dropped.
         4 credits spent. See `docs/decisions.md` (2026-07-14).*
-  - [ ] **Task 13 (new, 2026-07-13): rules-vs-LLM comparison, N runs.** Run the LLM over the same
+  - [x] **Task 13 (new, 2026-07-13): rules-vs-LLM comparison, N runs.** Run the LLM over the same
         fixtures the rules ran over, N times, and report the miss rate ("the agent missed the
         SpO2=105 critical in X of N runs"). This is the thesis-as-evidence slide, and it is what the
         Lyzr **Starter** upgrade was considered for — **note 2026-07-14: Starter was NOT purchased;
         still free tier, ~14.8 credits left, so size N ≤ 5 (2 credits/run) or buy Starter first —
         see OQ #6.** Keep the credit ledger and record/replay; raise the ledger cap, don't remove it.
         See `docs/decisions.md` (2026-07-13) and OQ #4 (corrected 2026-07-14).
+        **Live result (2026-07-16):** N=5 tries over the same 5 fixtures, only the record order
+        rotated between tries; all 5 replies usable (the JSON-escape contract rule held), 0 dropped.
+        Rules: identical 15/15 problems every try. LLM across the 5 tries: **1 silent miss**
+        (`metadata.extract_timestamp` warning, 1/5), **5 misgrades** (the missing facility NPI —
+        a critical — downgraded in 2/5; malformed diagnosis code, impossible BP, missing DOB once
+        each), **11 invented problems** (`encounter_id` flagged on 4 rule-clean records in 2 tries;
+        `patient.age` on the certified-clean record once). A different answer every try. Cost:
+        5 credits for the run + 1 lost to a 60s timeout (fix 549c2c1); ledger 10/15. Recordings
+        committed 47d2868 — the whole comparison replays offline. Analytics SQL in
+        `db/queries.sql` (miss rate, scorecard, confusion, reliability — 3910cb1).
+        See `docs/decisions.md` (2026-07-17).
 - [ ] **LLM escalation** — escalated records only → Lyzr → plain-English summary + cross-field
       contradiction detection (NOT re-validation). Test on fixtures only (credit budget)
 - [ ] **Postgres swap + Render deploy** — same SQLAlchemy Core code, switch DB URL (gated by OQ#3)

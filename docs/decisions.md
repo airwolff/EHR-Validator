@@ -450,3 +450,26 @@ narrative, exactly as the Task-11 review predicted. Ledger and Lyzr agree: 4 cre
 **Open:** the Studio sidebar shows a 20-credit monthly quota resetting Aug 11 despite the 2026-07-13
 Starter upgrade — verify billing before sizing Task 13 (OQ #6). · **Refs:**
 `app/agents/specialists.py` (`_CONTRACT`), `app/agents/recordings/`, `docs/for-review.md`.
+
+## 2026-07-17 — Task 13 live comparison: order alone changes the LLM's answer; rules never move
+
+**Decision:** the rules-vs-LLM comparison ran live 2026-07-16 at N=5 tries over the same 5 fixtures,
+one comparison message per try (1 credit each), with **record order inside the message as the only
+variable** — a fixed rotation, so any drift between tries is attributable to ordering, not content.
+All 5 replies were usable (the Task-12 JSON-escape contract rule held; 0 quarantined). Results, per
+the SQL over the persisted grades: rules returned the identical 15/15 problems every try; the LLM
+gave **a different answer every try** — 1 silent miss (the `metadata.extract_timestamp` warning,
+dropped in 1/5), 5 misgrades (the missing facility NPI, a **critical**, downgraded in 2/5; the
+malformed diagnosis code, the impossible BP, and the missing DOB once each), and 11 invented
+problems (`encounter_id` flagged on 4 rule-clean records in 2 tries; `patient.age` flagged once on
+the certified-clean record). Replay reproduces the whole run byte-for-byte from the committed
+recordings (47d2868). · **Status:** accepted · **Why:** this is the thesis-as-evidence slide — the
+miss rate was the point of the task, and the ordering-sensitivity result is stronger than the
+planned "missed X in N runs" framing because temp-0 determinism was expected to make tries
+identical, and it did not survive a reordered prompt. · **Consequences:** the presentation sentence
+is now measured, not asserted: "same 5 records, five tries — the rules: identical 15/15 every time;
+the AI: a different answer every time the order changed." One extra credit was lost to a 60s
+timeout before the run; the timeout is now configurable via `.env` and a junk value refuses before
+the charge (549c2c1). Ledger 10/15 spent; Lyzr sidebar ≈8.8 credits left this cycle. ·
+**Refs:** `app/agents/recordings/` (5 comparison recordings), `db/queries.sql` (miss rate,
+scorecard, confusion, reliability — 3910cb1), `docs/for-review.md` (Half 2 numbers), OQ #4/#6.
