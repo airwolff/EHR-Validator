@@ -100,3 +100,31 @@ def test_parse_tolerates_fences_and_raises_on_prose():
     assert len(audit.parse_audit_report(raw)) == 1
     with pytest.raises(ResponseUnparseable):
         audit.parse_audit_report("I could not find any patterns, sorry!")
+
+
+# The exact malformation both 2026-07-19 live runs produced: the auditor cites the
+# AGGREGATES JSON inside a JSON string value without escaping the double-quotes.
+# Condensed from the committed quarantined recording auditor-28852331df04.json.rejected.
+MALFORMED_LIVE_REPLY = (
+    '{"patterns":[{"name":"MEDITECH temperature capture defect","severity":"critical",'
+    '"evidence":[{"record_id":"AGGREGATES","quote":""issues": 6,"},'
+    '{"record_id":"AGGREGATES","quote":""field": "vitals.temp_f","}],'
+    '"hypothesis":"unit conversion fault in the MEDITECH feed",'
+    '"recommended_action":"audit the interface mapping"}]}'
+)
+
+
+def test_parse_repairs_unescaped_quotes_in_quote_values():
+    patterns = audit.parse_audit_report(MALFORMED_LIVE_REPLY)
+    assert len(patterns) == 1
+    assert patterns[0]["evidence"][0]["quote"] == '"issues": 6,'
+    assert patterns[0]["evidence"][1]["quote"] == '"field": "vitals.temp_f",'
+
+
+def test_parse_repair_handles_raw_newlines_in_quote_values():
+    # The first live run also put literal newlines inside the quote value.
+    raw = ('{"patterns":[{"name":"n","severity":"info",'
+           '"evidence":[{"record_id":"AGGREGATES","quote":""issues": 6,\n "records": 13"}],'
+           '"hypothesis":"h","recommended_action":"a"}]}')
+    patterns = audit.parse_audit_report(raw)
+    assert patterns[0]["evidence"][0]["quote"] == '"issues": 6,\n "records": 13'

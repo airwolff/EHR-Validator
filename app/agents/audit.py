@@ -18,6 +18,7 @@ on a synthetic corpus with planted defects and a committed answer key. It does n
 diagnose people or accuse clinicians; a human reads the report.
 """
 import json
+import re
 
 from app.agents.schema import VALID_SEVERITIES, evidence_is_verbatim
 from app.agents.specialists import ResponseUnparseable, _candidates
@@ -88,6 +89,25 @@ def build_audit_message(aggregates, corpus):
             + "\n\nRECORDS:\n" + "\n".join(blocks))
 
 
+# A "quote" string value up to the quote character that closes its evidence object.
+# "quote" is always the last key in an evidence item, so the value's true terminator
+# is the first `"` followed by `}`; an earlier `"` inside the cited JSON is never
+# directly followed by `}` in practice (both live replies confirm).
+_QUOTE_VALUE = re.compile(r'("quote"\s*:\s*")(.*?)("\s*})', re.DOTALL)
+
+
+def _repair_quote_values(candidate):
+    """Repair the auditor's one observed JSON failure (both 2026-07-19 live runs):
+    raw double-quotes and newlines inside "quote" values when citing the AGGREGATES
+    JSON block. Only tried after strict parsing fails — parseable text is never
+    rewritten, and the recording on disk is untouched; this reads it as-is."""
+    def _fix(match):
+        value = match.group(2).replace('\\"', '"')  # normalise, then re-escape all
+        value = value.replace('"', '\\"').replace("\n", "\\n")
+        return match.group(1) + value + match.group(3)
+    return _QUOTE_VALUE.sub(_fix, candidate)
+
+
 def parse_audit_report(raw):
     """The auditor's answer → a list of pattern dicts. Raises ResponseUnparseable.
     Tolerant of wrappers (fences, chatter), intolerant of failure — an unreadable reply
@@ -98,7 +118,10 @@ def parse_audit_report(raw):
         try:
             parsed = json.loads(candidate)
         except ValueError:
-            continue
+            try:
+                parsed = json.loads(_repair_quote_values(candidate))
+            except ValueError:
+                continue
         if isinstance(parsed, list):
             return parsed
         if isinstance(parsed, dict) and isinstance(parsed.get("patterns"), list):
@@ -153,7 +176,6 @@ def ground_patterns(patterns, sources):
 
 
 import os
-import re
 
 from app import store
 from app.agents.transport import get_response, quarantine_recording
