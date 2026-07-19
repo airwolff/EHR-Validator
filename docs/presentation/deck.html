@@ -1,0 +1,558 @@
+<title>EHR Data Quality Triage — Presentation Deck</title>
+<style>
+  /* ==== deck tokens — dark-only by design: the deck intercuts with dark
+     terminal recordings, light slides would strobe in the video ==== */
+  :root {
+    color-scheme: dark;
+    --page:        #0e0f11;
+    --surface:     #17191c;
+    --surface-2:   #1d2024;
+    --ink:         #f5f6f7;
+    --ink-2:       #b8bcc2;
+    --muted:       #82868c;
+    --hairline:    rgba(255,255,255,0.09);
+    --rules:       #3987e5;   /* deterministic engine — blue  */
+    --agent:       #199e70;   /* LLM / agent engine   — aqua  */
+    --rules-dim:   rgba(57,135,229,0.14);
+    --agent-dim:   rgba(25,158,112,0.13);
+    --critical:    #d03b3b;
+    --warning:     #fab219;
+    --good:        #0ca30c;
+    --sans: system-ui, -apple-system, "Segoe UI", sans-serif;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: var(--page);
+    color: var(--ink);
+    font-family: var(--sans);
+    overflow: hidden;
+  }
+
+  /* ==== fixed 1920x1080 stage, scaled to fit the viewport ==== */
+  #viewport { position: fixed; inset: 0; display: grid; place-items: center; }
+  #stage {
+    width: 1920px; height: 1080px;
+    position: relative;
+    transform-origin: center center;
+    flex: none;
+  }
+
+  .slide {
+    position: absolute; inset: 0;
+    padding: 72px 96px 96px;
+    box-sizing: border-box;
+    display: none;
+    flex-direction: column;
+  }
+  .slide.active { display: flex; }
+  @media (prefers-reduced-motion: no-preference) {
+    .slide.active { animation: fadein 220ms ease-out; }
+    @keyframes fadein { from { opacity: 0; } to { opacity: 1; } }
+  }
+
+  /* ==== chrome ==== */
+  .eyebrow {
+    font-size: 26px; font-weight: 700;
+    letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--muted);
+    margin: 0 0 18px;
+  }
+  .eyebrow .demo-n { color: var(--agent); }
+  #hud {
+    position: absolute; left: 96px; right: 96px; bottom: 34px;
+    display: flex; justify-content: space-between; align-items: baseline;
+    font-size: 22px; color: var(--muted);
+    pointer-events: none;
+  }
+  #counter { font-variant-numeric: tabular-nums; letter-spacing: 0.06em; }
+
+  h1 {
+    font-size: 72px; line-height: 1.08; font-weight: 750;
+    letter-spacing: -0.015em; margin: 0 0 28px;
+    text-wrap: balance;
+  }
+  h1 small { display: block; font-size: 40px; font-weight: 600; color: var(--ink-2); margin-top: 10px; }
+  .lede { font-size: 34px; line-height: 1.4; color: var(--ink-2); margin: 0; max-width: 30em; }
+
+  .cols { display: flex; gap: 64px; flex: 1; min-height: 0; align-items: stretch; }
+  .col  { display: flex; flex-direction: column; gap: 28px; min-width: 0; }
+
+  /* ==== cards / callouts ==== */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--hairline);
+    border-radius: 10px;
+    padding: 28px 32px;
+    font-size: 30px; line-height: 1.42;
+  }
+  .card h3 { margin: 0 0 10px; font-size: 26px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+  .card p  { margin: 0; color: var(--ink-2); }
+  .card p strong, .card strong { color: var(--ink); font-weight: 650; }
+  .edge-rules  { border-left: 5px solid var(--rules); }
+  .edge-agent  { border-left: 5px solid var(--agent); }
+  .edge-warn   { border-left: 5px solid var(--warning); }
+
+  .mono  { font-family: var(--mono); }
+  .cmd {
+    font-family: var(--mono); font-size: 29px; line-height: 1.4;
+    background: #0a0b0c; border: 1px solid var(--hairline); border-radius: 10px;
+    padding: 22px 28px; color: var(--ink);
+  }
+  .cmd .prompt { color: var(--agent); }
+  .cmd .nb { white-space: nowrap; }
+
+  .kv { display: flex; flex-wrap: wrap; gap: 14px 34px; font-size: 30px; color: var(--ink-2); }
+  .kv b { color: var(--ink); font-weight: 650; font-variant-numeric: tabular-nums; }
+
+  .rules-ink { color: var(--rules); }
+  .agent-ink { color: var(--agent); }
+
+  /* ==== slide 1 ==== */
+  .hero-num {
+    font-size: 230px; font-weight: 760; line-height: 0.95;
+    letter-spacing: -0.03em; margin: 8px 0 6px;
+  }
+  .hero-unit { font-size: 90px; font-weight: 600; color: var(--ink-2); }
+  .hero-cap { font-size: 30px; line-height: 1.45; color: var(--ink-2); max-width: 13em; }
+  .flowline {
+    font-family: var(--mono); font-size: 28px; color: var(--ink-2);
+    display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: baseline;
+  }
+  .flowline .arr { color: var(--muted); }
+
+  /* ==== architecture diagram (slide 2) ==== */
+  .diagram { display: flex; flex-direction: column; gap: 26px; flex: 1; min-height: 0; justify-content: center; }
+  .dg-row { display: flex; align-items: center; gap: 18px; }
+  .dg-box {
+    background: var(--surface); border: 2px solid var(--hairline); border-radius: 10px;
+    padding: 18px 24px; font-size: 28px; line-height: 1.3; text-align: center;
+    flex: 1; min-width: 0;
+  }
+  .dg-box .sub { display: block; font-size: 23px; color: var(--muted); margin-top: 6px; }
+  .dg-rules { border-color: var(--rules); background: var(--rules-dim); }
+  .dg-agent { border-color: var(--agent); background: var(--agent-dim); }
+  .dg-arr { font-size: 42px; color: var(--muted); flex: none; line-height: 1; }
+  .dg-stack { display: flex; flex-direction: column; gap: 14px; flex: 1.35; min-width: 0; }
+  .dg-stack .dg-box { flex: none; }
+  .dg-band {
+    border: 1px solid var(--hairline); border-radius: 14px;
+    padding: 24px 28px; background: rgba(255,255,255,0.02);
+  }
+  .dg-band-label {
+    font-size: 24px; letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--muted); font-weight: 700; margin: 0 0 18px;
+  }
+  .dg-legend { display: flex; gap: 44px; font-size: 26px; color: var(--ink-2); }
+  .dg-legend .swatch {
+    display: inline-block; width: 26px; height: 26px; border-radius: 6px;
+    vertical-align: -4px; margin-right: 12px;
+  }
+
+  /* ==== tables ==== */
+  table { border-collapse: collapse; font-variant-numeric: tabular-nums; width: 100%; }
+  th, td { padding: 12px 26px; font-size: 30px; text-align: right; }
+  th:first-child, td:first-child { text-align: left; white-space: nowrap; }
+  th {
+    font-size: 23px; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--muted); font-weight: 700; border-bottom: 2px solid var(--hairline);
+  }
+  td { border-bottom: 1px solid var(--hairline); color: var(--ink-2); }
+  td b { color: var(--ink); font-weight: 650; }
+  tr.rules-row td { color: var(--rules); font-weight: 650; border-bottom: none; }
+  td .bad  { color: var(--critical); font-weight: 700; }
+  td .warn { color: var(--warning);  font-weight: 700; }
+  .tbl-cap { font-size: 24px; color: var(--muted); margin-top: 14px; }
+
+  /* ==== bar chart (slide 5, Q12) ==== */
+  .bars { display: flex; flex-direction: column; gap: 22px; }
+  .bar-row { display: grid; grid-template-columns: 190px 1fr 210px; align-items: center; gap: 22px; }
+  .bar-name { font-size: 30px; color: var(--ink-2); }
+  .bar-track { height: 44px; background: var(--surface-2); border-radius: 6px; position: relative; overflow: hidden; }
+  .bar-fill {
+    position: absolute; inset: 0 auto 0 0; border-radius: 6px 4px 4px 6px;
+    background: var(--rules);
+  }
+  .bar-val { font-size: 30px; font-variant-numeric: tabular-nums; color: var(--ink-2); }
+  .bar-val b { color: var(--ink); font-weight: 700; }
+  .chart-title { font-size: 28px; font-weight: 650; margin: 0 0 6px; }
+  .chart-sub { font-size: 24px; color: var(--muted); margin: 0 0 26px; }
+
+  /* ==== stat tiles (slide 6) ==== */
+  .tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 28px; }
+  .tile {
+    background: var(--surface); border: 1px solid var(--hairline); border-radius: 12px;
+    padding: 30px 34px; display: flex; flex-direction: column; gap: 10px;
+  }
+  .tile .t-label { font-size: 24px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+  .tile .t-big { font-size: 92px; font-weight: 760; line-height: 1; letter-spacing: -0.02em; }
+  .tile .t-big .dim { color: var(--muted); font-weight: 500; }
+  .tile .t-sub { font-size: 27px; line-height: 1.4; color: var(--ink-2); }
+  .tile .t-sub b { color: var(--ink); }
+  .quote {
+    border-left: 5px solid var(--rules);
+    background: var(--surface);
+    border-radius: 0 10px 10px 0;
+    padding: 30px 40px;
+    font-size: 33px; line-height: 1.48;
+    margin: 34px 0 0;
+  }
+  .quote .attr { display: block; font-size: 24px; color: var(--muted); margin-top: 14px; font-style: normal; }
+
+  /* ==== step strip (slide 7) ==== */
+  .steps { display: flex; gap: 16px; align-items: stretch; }
+  .step {
+    flex: 1; background: var(--surface); border: 1px solid var(--hairline); border-radius: 10px;
+    padding: 24px 26px; font-size: 27px; line-height: 1.42; color: var(--ink-2);
+  }
+  .step b { color: var(--ink); }
+  .step .n {
+    display: inline-grid; place-items: center;
+    width: 44px; height: 44px; border-radius: 50%;
+    background: var(--rules-dim); color: var(--rules);
+    font-weight: 750; font-size: 26px; margin-bottom: 14px;
+  }
+  .step-arr { align-self: center; font-size: 40px; color: var(--muted); flex: none; }
+
+  .bigline {
+    font-size: 46px; font-weight: 700; line-height: 1.25; letter-spacing: -0.01em;
+    margin: 0; text-wrap: balance;
+  }
+
+  /* ==== way-forward grid (slide 8) ==== */
+  .ways { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; flex: 1; align-content: center; }
+  .way { background: var(--surface); border: 1px solid var(--hairline); border-radius: 12px; padding: 30px 36px; }
+  .way h3 { margin: 0 0 12px; font-size: 34px; font-weight: 700; }
+  .way p { margin: 0; font-size: 29px; line-height: 1.45; color: var(--ink-2); }
+  .way .tag { font-size: 23px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--agent); font-weight: 700; }
+
+  /* ==== close (slide 9) ==== */
+  .close-wrap { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 44px; max-width: 1500px; }
+  .close-wrap .lede { max-width: none; }
+</style>
+
+<div id="viewport">
+<div id="stage">
+
+  <!-- ================= SLIDE 1 — Project Objective ================= -->
+  <section class="slide active">
+    <p class="eyebrow">Project Objective</p>
+    <h1>EHR Data Quality Triage Pipeline<small>two validation engines, one output contract, SQL over everything</small></h1>
+    <div class="cols">
+      <div class="col" style="flex:0 0 560px; justify-content:center;">
+        <div>
+          <div class="hero-num">71.2<span class="hero-unit">°F</span></div>
+          <p class="hero-cap">A Claude-based validator called this record fine. A one-line Python rule caught it instantly.</p>
+        </div>
+      </div>
+      <div class="col" style="flex:1; justify-content:center;">
+        <div class="flowline">
+          <span>JSON record</span><span class="arr">→</span>
+          <span>validator</span><span class="arr">→</span>
+          <span>{field · problem · severity · remediation}</span><span class="arr">→</span>
+          <span>DB</span><span class="arr">→</span>
+          <span>SQL trends</span>
+        </div>
+        <div class="card">
+          <h3>Severity, defined once</h3>
+          <p><strong>Plausibility of the datum — not patient survivability.</strong> SpO2&nbsp;&gt;&nbsp;100 is critical because it is impossible data.</p>
+        </div>
+        <div class="card edge-rules">
+          <h3>The thesis</h3>
+          <p>For fixed, well-specified rules, <strong class="rules-ink">deterministic Python is the correct tool</strong> — faster, cheaper, auditable. <strong class="agent-ink">The LLM exists only for what rules can't reach</strong>: unstructured text, cross-field contradictions, patterns across records.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= SLIDE 2 — Architecture ================= -->
+  <section class="slide">
+    <p class="eyebrow">Architecture</p>
+    <h1>Two engines, one contract</h1>
+    <div class="diagram">
+      <div class="dg-row">
+        <div class="dg-box" style="flex:0.8;">Record<span class="sub mono">JSON</span></div>
+        <div class="dg-arr">→</div>
+        <div class="dg-stack">
+          <div class="dg-box dg-rules">Deterministic validator<span class="sub">Python rules</span></div>
+          <div class="dg-box dg-agent">Lyzr agent<span class="sub">Claude Sonnet · temp 0 · record/replay</span></div>
+        </div>
+        <div class="dg-arr">→</div>
+        <div class="dg-box" style="flex:1.2;">One JSON contract<span class="sub mono">status · issues[field, problem, severity, remediation]</span></div>
+        <div class="dg-arr">→</div>
+        <div class="dg-box">SQLite / Postgres<span class="sub">SQLAlchemy Core · FastAPI</span></div>
+        <div class="dg-arr">→</div>
+        <div class="dg-box" style="flex:0.8;">SQL analytics</div>
+      </div>
+      <div class="dg-band">
+        <p class="dg-band-label">Nightly agent crew — no human kicks it off</p>
+        <div class="dg-row">
+          <div class="dg-box dg-rules">Router<span class="sub">deterministic — assigns each record a domain</span></div>
+          <div class="dg-arr">→</div>
+          <div class="dg-stack">
+            <div class="dg-box dg-agent">Clinical specialist</div>
+            <div class="dg-box dg-agent">Identity specialist</div>
+          </div>
+          <div class="dg-arr">→</div>
+          <div class="dg-box dg-rules">Grounding guard<span class="sub">drops any finding whose quoted evidence isn't verbatim in the note</span></div>
+          <div class="dg-arr">→</div>
+          <div class="dg-box dg-rules">Credit ledger<span class="sub">hard stop at the monthly budget</span></div>
+        </div>
+      </div>
+      <div class="dg-legend">
+        <span><span class="swatch" style="background:var(--rules);"></span>deterministic Python</span>
+        <span><span class="swatch" style="background:var(--agent);"></span>LLM call</span>
+        <span style="margin-left:auto; color:var(--ink);"><b>Deterministic orchestration — no language model decides what runs next.</b></span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= SLIDE 3 — Demo 1: nightly agent run ================= -->
+  <section class="slide">
+    <p class="eyebrow">Live Project Demo<span class="demo-n"> · 1 of 3</span></p>
+    <h1>The nightly agent run<small>three recorded segments · committed replay recordings · 0 credits on camera</small></h1>
+    <div class="cols">
+      <div class="col" style="flex:1.1; justify-content:center;">
+        <div class="card">
+          <h3>The record — <span class="mono" style="text-transform:none; color:var(--ink);">E-WOW-01</span></h3>
+          <p>Internally consistent: vitals in range, codes valid, dates sane. The deterministic validator returns <strong class="rules-ink">0 issues</strong>.</p>
+        </div>
+        <div class="card edge-agent">
+          <h3>And it's wrong</h3>
+          <p>The note describes a <strong>62-year-old man</strong>; the structured data says a <strong>34-year-old woman</strong>. A wrong-patient note — no field-level rule can see it. You have to read the note against the chart.</p>
+        </div>
+        <div class="cmd"><span class="prompt">$</span> python <span class="nb">-m</span> app.agents <span class="nb">--date 2026-07-14</span> <span class="nb">--mode replay</span></div>
+      </div>
+      <div class="col" style="flex:1; justify-content:center;">
+        <div class="card">
+          <h3>What comes back</h3>
+          <p><strong>4 critical findings</strong>, all on E-WOW-01 — <strong class="agent-ink">2 identity + 2 clinical</strong>: one underlying wrong-patient defect, caught from two angles by independent specialists.</p>
+        </div>
+        <div class="kv">
+          <span>evidence <b>verbatim, guard-checked</b></span>
+          <span>dropped <b>0</b></span>
+          <span>clean control record <b>cleared</b></span>
+          <span>credits spent <b>0</b></span>
+        </div>
+        <div class="card">
+          <p>The output is a <strong>worklist for a human</strong> — nothing auto-corrects the chart.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= SLIDE 4 — Demo 2: five-try comparison ================= -->
+  <section class="slide">
+    <p class="eyebrow">Live Project Demo<span class="demo-n"> · 2 of 3</span></p>
+    <h1>The rules win theirs<small>same 5 records · 15 planted problems · 5 tries · temp 0 · only the record order changed</small></h1>
+    <div class="cols">
+      <div class="col" style="flex:1; justify-content:center;">
+        <div class="card">
+          <h3>How each try grades</h3>
+          <p><strong>caught</strong> · <strong style="color:var(--warning);">misgraded</strong> (wrong severity) · <strong style="color:var(--critical);">silent miss</strong> (nobody downstream knows) · <strong>false alarm</strong> (burns reviewer time)</p>
+        </div>
+        <div class="card edge-rules">
+          <p>The deterministic validator: <strong class="rules-ink">identical 15 / 15, all five tries</strong> — in milliseconds, for free.</p>
+        </div>
+        <div class="cmd"><span class="prompt">$</span> python <span class="nb">-m</span> app.agents.compare <span class="nb">--runs 5</span> <span class="nb">--mode replay</span></div>
+      </div>
+      <div class="col" style="flex:1; justify-content:center;">
+        <table>
+          <thead><tr><th>try</th><th>caught</th><th>misgraded</th><th>missed</th><th>false alarms</th></tr></thead>
+          <tbody>
+            <tr><td>1</td><td><b>14</b></td><td>1</td><td>0</td><td>0</td></tr>
+            <tr><td>2</td><td><b>14</b></td><td>0</td><td><span class="bad">1</span></td><td>0</td></tr>
+            <tr><td>3</td><td><b>15</b></td><td>0</td><td>0</td><td><span class="warn">7</span></td></tr>
+            <tr><td>4</td><td><b>14</b></td><td>1</td><td>0</td><td><span class="warn">4</span></td></tr>
+            <tr><td>5</td><td><b>12</b></td><td>3</td><td>0</td><td>0</td></tr>
+            <tr class="rules-row"><td>rules, every try</td><td>15</td><td>0</td><td>0</td><td>0</td></tr>
+          </tbody>
+        </table>
+        <p class="tbl-cap">Q9 in <span class="mono">db/queries.sql</span> — SQL over the persisted grades, not a summary of them.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= SLIDE 5 — Demo 3: month-end auditor ================= -->
+  <section class="slide">
+    <p class="eyebrow">Live Project Demo<span class="demo-n"> · 3 of 3</span></p>
+    <h1>The month-end auditor<small>40 synthetic June records · 3 source systems · 4 planted patterns · one call over the whole month</small></h1>
+    <div class="cols">
+      <div class="col" style="flex:1; justify-content:center;">
+        <div class="card">
+          <h3>Planted answer key — committed</h3>
+          <p class="mono" style="font-size:27px;">unit_conversion_meditech · copy_paste_note · gender_tone_bias · race_missing_zip</p>
+        </div>
+        <div class="card edge-warn">
+          <h3>Framing rule</h3>
+          <p>The auditor flags <strong>documentation bias in the data</strong>, on a synthetic corpus with a known planted answer key — it does not diagnose people, and it does not accuse clinicians.</p>
+        </div>
+        <div class="cmd"><span class="prompt">$</span> python <span class="nb">-m</span> app.agents.audit <span class="nb">--month 2026-06</span> <span class="nb">--mode replay</span> <span class="nb">--grade</span></div>
+      </div>
+      <div class="col" style="flex:1; justify-content:center;">
+        <div>
+          <p class="chart-title">Missing zip code by race — June corpus</p>
+          <p class="chart-sub">Q12 in <span class="mono">db/queries.sql</span> — SQL counts the asymmetry; the auditor only interprets it.</p>
+          <div class="bars">
+            <div class="bar-row">
+              <span class="bar-name">Black</span>
+              <div class="bar-track"><div class="bar-fill" style="width:80%;"></div></div>
+              <span class="bar-val"><b>8 / 10 · 80%</b></span>
+            </div>
+            <div class="bar-row">
+              <span class="bar-name">White</span>
+              <div class="bar-track"><div class="bar-fill" style="width:0.4%;"></div></div>
+              <span class="bar-val">0 / 10 · 0%</span>
+            </div>
+            <div class="bar-row">
+              <span class="bar-name">Hispanic</span>
+              <div class="bar-track"><div class="bar-fill" style="width:0.4%;"></div></div>
+              <span class="bar-val">0 / 10 · 0%</span>
+            </div>
+            <div class="bar-row">
+              <span class="bar-name">Asian</span>
+              <div class="bar-track"><div class="bar-fill" style="width:0.4%;"></div></div>
+              <span class="bar-val">0 / 10 · 0%</span>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <p>The rules already caught all <strong>6 MEDITECH records</strong> sending Celsius values in a Fahrenheit field. SQL gets first crack at everything.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= SLIDE 6 — Key Outcomes: the measured numbers ================= -->
+  <section class="slide">
+    <p class="eyebrow">Key Outcomes</p>
+    <h1>The measured numbers<small>every number: SQL over persisted grades, or a committed recording</small></h1>
+    <div class="tiles">
+      <div class="tile" style="border-top:4px solid var(--agent);">
+        <span class="t-label">Demo 1 · wrong-patient record</span>
+        <span class="t-big">0 <span class="dim">→</span> 4</span>
+        <span class="t-sub"><b>0</b> rule issues → <b>4 grounded critical findings</b> from the agent batch · nothing fabricated</span>
+      </div>
+      <div class="tile" style="border-top:4px solid var(--rules);">
+        <span class="t-label">Demo 2 · five tries</span>
+        <span class="t-big">15/15 <span class="dim">×5</span></span>
+        <span class="t-sub">rules identical, every try · the LLM different every try: <b>1</b> silent miss, <b>5</b> wrong severities, <b>11</b> invented problems</span>
+      </div>
+      <div class="tile" style="border-top:4px solid var(--agent);">
+        <span class="t-label">Demo 3 · month-end audit</span>
+        <span class="t-big">4/4</span>
+        <span class="t-sub">planted patterns caught · <b>0</b> evidence dropped · replayed offline for <b>0</b> credits</span>
+      </div>
+    </div>
+    <blockquote class="quote">
+      &ldquo;I ran both engines over the same 5 records five times. The rules: identical 15/15, every time. The AI: a different answer every time the record order changed &mdash; 1 silent miss, 5 wrong severities, 11 invented problems, one of them on a certified-clean record.&rdquo;
+      <span class="attr">measured 2026-07-16 · Q9 in db/queries.sql · both halves of the thesis held under measurement</span>
+    </blockquote>
+  </section>
+
+  <!-- ================= SLIDE 7 — Key Outcomes: the guard ================= -->
+  <section class="slide">
+    <p class="eyebrow">Key Outcomes</p>
+    <h1 style="font-size:60px;">The guard, and a failure I'm keeping<small>the deterministic guard caught the LLM breaking its own output contract — twice, live</small></h1>
+    <div class="steps" style="margin-bottom:34px;">
+      <div class="step"><span class="n">1</span><br><b>Both live auditor calls broke their JSON the same way</b> — an unescaped quote where the reply cited the aggregates block.</div>
+      <div class="step-arr">→</div>
+      <div class="step"><span class="n">2</span><br><b>The guard quarantined both replies.</b> Nothing corrupted persisted, nothing silently swallowed.</div>
+      <div class="step-arr">→</div>
+      <div class="step"><span class="n">3</span><br><b>A test-pinned parse repair</b> recovered the genuine recording — no edit, no third try.</div>
+      <div class="step-arr">→</div>
+      <div class="step"><span class="n">4</span><br>Total cost: <b>2 credits.</b></div>
+    </div>
+    <div class="cols" style="flex:0 1 auto;">
+      <div class="col" style="flex:1;">
+        <div class="card edge-warn" style="height:100%; box-sizing:border-box;">
+          <h3>Limit 1 — pinned by tests</h3>
+          <p><strong>Not an injection defence.</strong> An instruction riding inside the note gets cited verbatim, so the guard keeps it.</p>
+        </div>
+      </div>
+      <div class="col" style="flex:1;">
+        <div class="card edge-warn" style="height:100%; box-sizing:border-box;">
+          <h3>Limit 2 — pinned by tests</h3>
+          <p><strong>Verbatim &ne; faithful.</strong> A model can cite <span class="mono">"dysuria"</span> out of <span class="mono">"denies dysuria"</span> — so a human adjudicates the worklist.</p>
+        </div>
+      </div>
+    </div>
+    <p class="bigline" style="margin-top:40px;">I did not let a language model decide control flow over patient data.</p>
+  </section>
+
+  <!-- ================= SLIDE 8 — Way Forward ================= -->
+  <section class="slide">
+    <p class="eyebrow">Way Forward</p>
+    <h1>Four items</h1>
+    <div class="ways">
+      <div class="way">
+        <h3>Adjudicator agent <span class="tag">deferred, not dropped</span></h3>
+        <p>When the clinical and identity specialists conflict on the same record, a third call judges the disagreement — a job rules genuinely can't do.</p>
+      </div>
+      <div class="way">
+        <h3>Web UI</h3>
+        <p>Over the worklist and the trend queries.</p>
+      </div>
+      <div class="way">
+        <h3>Postgres deploy on Render</h3>
+        <p>The SQLAlchemy Core code runs there unchanged; the free tier's 30-day clock is the only constraint, and synthetic data reloads fine.</p>
+      </div>
+      <div class="way">
+        <h3>Real-corpus caveats</h3>
+        <p>Everything here is synthetic and planted. Real notes are messier — the grader and the bias framing both need rework before this touches anything real.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= SLIDE 9 — Close ================= -->
+  <section class="slide">
+    <p class="eyebrow">Close</p>
+    <div class="close-wrap">
+      <p class="bigline" style="font-size:56px;">Every claim traces to a committed recording or a SQL query you can re-run.</p>
+      <p class="lede">The rules kept the jobs with fixed specs. The agents took the jobs that need reading. A deterministic layer checked the agents' work.<br><br><strong style="color:var(--ink);">I gave each job to the tool that's good at it.</strong></p>
+      <p class="cmd" style="align-self:flex-start; margin:0;">github.com/airwolff/EHR-Validator</p>
+    </div>
+  </section>
+
+  <div id="hud">
+    <span>EHR Data Quality Triage Pipeline</span>
+    <span id="counter">1 / 9</span>
+  </div>
+
+</div>
+</div>
+
+<script>
+  (function () {
+    var slides = Array.prototype.slice.call(document.querySelectorAll('.slide'));
+    var counter = document.getElementById('counter');
+    var stage = document.getElementById('stage');
+    var i = 0;
+
+    var fromHash = parseInt(location.hash.slice(1), 10);
+    if (fromHash >= 1 && fromHash <= slides.length) i = fromHash - 1;
+
+    function show(n) {
+      i = Math.max(0, Math.min(slides.length - 1, n));
+      slides.forEach(function (s, k) { s.classList.toggle('active', k === i); });
+      counter.textContent = (i + 1) + ' / ' + slides.length;
+      history.replaceState(null, '', '#' + (i + 1));
+    }
+
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') { e.preventDefault(); show(i + 1); }
+      else if (e.key === 'ArrowLeft' || e.key === 'PageUp') { e.preventDefault(); show(i - 1); }
+      else if (e.key === 'Home') { e.preventDefault(); show(0); }
+      else if (e.key === 'End')  { e.preventDefault(); show(slides.length - 1); }
+    });
+
+    function fit() {
+      var s = Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
+      stage.style.transform = 'scale(' + s + ')';
+    }
+    window.addEventListener('resize', fit);
+    fit();
+    show(i);
+  })();
+</script>
