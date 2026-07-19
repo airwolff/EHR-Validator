@@ -473,3 +473,32 @@ timeout before the run; the timeout is now configurable via `.env` and a junk va
 the charge (549c2c1). Ledger 10/15 spent; Lyzr sidebar ≈8.8 credits left this cycle. ·
 **Refs:** `app/agents/recordings/` (5 comparison recordings), `db/queries.sql` (miss rate,
 scorecard, confusion, reliability — 3910cb1), `docs/for-review.md` (Half 2 numbers), OQ #4/#6.
+
+## 2026-07-19 — Month-end auditor agent approved; presentation is a recorded video built around three replay demos
+
+**Decision:** two coupled scope decisions, both Andy-approved 2026-07-18/19. (1) The final
+presentation is a **15-minute recorded video** (slot moved to Tue Jul 21 9:30 EST; Andy may be
+unable to attend and proposed a YouTube recording): HTML deck published as a private Artifact,
+script written in Andy's measured voice (profile from his sent mail), three screen-recorded demo
+segments run entirely from committed replay recordings at zero credit cost, story-first structure
+with Mahima's four required headings (Project Objective / Live Project Demo / Key Outcomes / Way
+Forward) verbatim on slides. (2) Build the **month-end auditor agent now** — Phase 3 of the
+original capstone pitch, delivered instead of promised: one Lyzr call per month over (a) the
+month's SQL aggregates and (b) the full synthetic note corpus, reporting only patterns a GROUP BY
+cannot express, grounded by the same verbatim-evidence guard, graded against a **planted answer
+key** in a committed deterministic generator (four plants: unit-conversion root cause, copy-paste
+propagation, gender tone bias, race-correlated missingness — the last planted SQL-countable on
+purpose, so the deterministic/LLM split is demonstrated honestly). · **Status:** accepted ·
+**Why:** the auditor is the one agentic addition that strengthens the thesis rather than
+contradicting it — SQL gets first crack at everything, the agent is credited only for judgment
+over aggregates and semantics in prose (root causes, paraphrased duplication, documentation-bias
+tone) that rules genuinely cannot reach; bias detection makes that split vivid and is credible to
+a healthcare audience. Con, recorded: presenting Phase 3 as built admits it was late; building it
+now spends deadline slack. · **Consequences:** hard fallback is binding — if the auditor is not
+graded and green by Sun morning Jul 19–20, it drops to Way Forward and the deck ships with the
+two-demo map; the presentation never waits on the agent. Live budget ≤2 credits (≈8.8 remain).
+Bias framing rule: the auditor flags documentation bias in synthetic data with a known answer
+key — it does not diagnose people or accuse clinicians. · **Refs:**
+`docs/superpowers/specs/2026-07-18-month-end-auditor-design.md` (0494f7f),
+`docs/superpowers/plans/2026-07-18-month-end-auditor.md` (80cb847), `docs/for-review.md`,
+Mahima's Jul 1 + Jul 16 emails (requirements + reschedule).

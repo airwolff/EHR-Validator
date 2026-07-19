@@ -1,80 +1,88 @@
-# Handoff — EHR Triage Pipeline — 2026-07-18
+# Handoff — EHR Triage Pipeline — 2026-07-19
 
-Read `CLAUDE.md` and `docs/phase-checklist.md` first, then this. See `docs/session-protocol.md` for
-how to use/update this file. **Verify the staleness block below before trusting anything here.**
-(A `SessionStart` hook runs that check automatically and will say STALE if it drifted.)
+Read `CLAUDE.md` and `docs/phase-checklist.md` first, then this. See `docs/session-protocol.md`
+for how to use/update this file.
 
 ## Staleness block (check before trusting)
-- **Written:** 2026-07-18
-- **HEAD at write time:** `cc37c0a` (branch `main`, pushed, in sync with `origin/main`). The commit
-  that carries this handoff is one `[docs]` commit on top of it — that alone is not drift.
-- **Uncommitted at write time:** clean (this file is the only change, committed right after).
-- **Tests:** `python -m pytest -q` → **181 passed in 0.94s** (verified 2026-07-18)
-- **Boots?** Yes — `python -c "import app.main"` → `boots` (verified 2026-07-18)
+- **Written:** 2026-07-19
+- **HEAD at write time:** `80cb847` (branch `main`; the commit carrying this handoff is one
+  `[docs]` commit on top — that alone is not drift)
+- **Uncommitted at write time:** clean (this file + decisions entry are the only changes,
+  committed right after)
+- **Tests:** `python -m pytest -q` → **181 passed in 0.83s** (verified 2026-07-19)
+- **Boots?** Yes — `python -c "import app.main"` → `boots` (verified 2026-07-19)
 - **Staleness test:** if HEAD moved past the docs commit or `git status -s` differs, trust git +
   code and rewrite this early.
 
-## ⚠️ Before auditing or "fixing" anything
-The code deliberately disagrees with `docs/superpowers/plans/2026-07-09-multi-agent-triage.md` in
-~20 places. Every deviation is a recorded decision in `docs/decisions.md` (each dated entry names
-its plan task and what it deviates from) and is pinned by a named test. **Read `decisions.md`
-first; the plan is a historical document.** Reverting a deviation because "the plan says otherwise"
-reintroduces a bug we already paid to find.
-
 ## Where we are
 
-**The build is complete. Task 13 — the thesis-as-evidence experiment — ran live 2026-07-16,
-is graded, replay-verified, committed, and written into the docs.** All plan tasks plus Task 13
-are done, verified by running, and pushed.
+**The pipeline build is complete (through Task 13). This session designed the final
+presentation AND a new build item — the month-end auditor agent — and produced an approved
+spec and a full implementation plan. NOTHING from that plan is built yet; no plan code has
+been written or run.**
 
-The Task 13 result (numbers from SQL over the persisted grades, not estimates):
-- N=5 live tries over the same 5 fixtures; the **only variable was record order** in the message
-  (fixed rotation). All 5 replies usable, 0 quarantined — the Task-12 JSON-escape contract rule held.
-- **Rules:** identical 15/15 problems, every try. **LLM:** a different answer every try —
-  1 silent miss (`metadata.extract_timestamp` warning, 1/5), 5 misgrades (missing facility NPI,
-  a critical, downgraded 2/5; malformed diagnosis code / impossible BP / missing DOB once each),
-  11 invented problems (`encounter_id` on 4 rule-clean records in 2 tries; `patient.age` once on
-  the certified-clean record).
-- Recordings committed (`app/agents/recordings/comparison-*.json`, commit `47d2868`) — the whole
-  run replays offline for free: `python -m app.agents` comparison mode, `--mode replay`.
-- Analytics live in `db/queries.sql` (miss rate, scorecard, confusion, reliability — `3910cb1`).
+- Spec (approved by Andy): `docs/superpowers/specs/2026-07-18-month-end-auditor-design.md`
+  (commit `0494f7f`). The why lives there and in `docs/decisions.md` 2026-07-19 entry.
+- Plan (12 tasks, full code in steps): `docs/superpowers/plans/2026-07-18-month-end-auditor.md`
+  (commit `80cb847`). Tasks 1–6 = TDD build of the auditor; Task 7 = **Andy-gated live run
+  (1 credit)**; Tasks 8–12 = docs, runbook, script, deck, handoff.
 
-**Credits:** ledger 10/15 spent; Lyzr sidebar ≈8.8 left on the free 20/month (resets Aug 11).
-This session's spend: 5 tries + 1 lost to a 60s timeout (fix: timeout now configurable via `.env`,
-junk value refuses before the charge — `549c2c1`). Starter was never purchased or needed (OQ #6).
+**The deadline that drives everything:** AiXcelerate presentation slot is **Tue Jul 21,
+9:30–11:00 EST** (Mahima's reschedule email, Jul 16). Andy may not be able to attend and asked
+to submit a **recorded video on YouTube** — no confirmed answer, a "second slot" was mentioned.
+Requirements from Mahima's Jul 1 email: **15 minutes**, must cover **Project Objective, Live
+Project Demo, Key Outcomes, Way Forward** (these four appear verbatim as slide labels in the
+plan). Working assumption: **the recording must exist by end of Mon Jul 20.**
 
-The presentation argument — both halves, with the slide sentence — is in `docs/for-review.md`.
-The full experiment rationale is `docs/decisions.md` (2026-07-17 entry).
+Presentation decisions (all settled with Andy — do not re-ask):
+- **Recorded video**, 15 min; audience = cohort + hiring team + mentor.
+- **HTML deck published as a private Artifact**, presented full-screen while recording.
+- **Three live screen-recorded demo segments**, all from committed replay recordings, zero
+  credits: nightly batch (wow record), five-try comparison, month-end audit.
+- **Story-first structure** (minute map in the spec) with rubric headings on slides.
+- **Script in Andy's voice** — profile saved to Claude memory (`andy-writing-voice`):
+  numbers first, short declaratives, comma splices, plain verbs, no hype, no exclamation marks.
+
+**Credits:** ledger 10/15 spent, sidebar ≈8.8 left (resets Aug 11). The plan budgets ≤2 live
+audit calls. Nothing was spent this session.
 
 ## ► Next step (do this first)
 
-**The AiXcelerate window (Jul 8–17) is over. Shift to the presentation/write-up.**
-`docs/for-review.md` holds the argument structure, both thesis halves with measured numbers, and
-the exact slide sentence — start there. The demo story: live wow-record catch (Half 1) + the
-five-try comparison replayed offline (Half 2), both from committed recordings, zero credits.
+**Execute the plan, Task 1** (`docs/superpowers/plans/2026-07-18-month-end-auditor.md`),
+via superpowers:subagent-driven-development (recommended in-plan) or executing-plans.
+Two open items Andy has NOT yet answered — ask before the first commit:
+1. Execution approach (subagent-driven vs inline).
+2. Blanket approval for the plan's per-task commits (messages are written in the plan).
+   Without it, pause for approval at every commit. **Task 7's live call is a hard stop for
+   Andy's explicit go-ahead regardless.**
 
-If build work resumes instead, the remaining checklist items are gated on Andy's answers to
-`docs/open-questions.md` #1–#3 (web UI scope, escalation surfacing, Render deploy timing) —
-ask, don't assume. The adjudicator agent stays deferred (OQ #5).
+**The fallback rule is in the spec and is binding:** if the auditor isn't graded and green by
+end of Sat Jul 19 (hard: Sun morning), it drops to Way Forward, Demo 3 is cut, and the deck
+ships with the two-demo map. The presentation never waits on the agent.
 
 ## Dead ends — don't retry
-- **Don't re-run the live comparison to "confirm."** Temp 0 does not make tries identical (that's
-  the finding), a re-run costs real credits, and replay already reproduces the graded run
-  byte-for-byte. New live runs need a fresh reason and Andy's OK.
-- **Don't set the Lyzr timeout to 60s** or trust the old default: one credit died to a 60s attempt
-  before `549c2c1`. Timeout comes from `.env` now; a junk value refuses before charging.
-- The full pre-Task-13 dead-end list (unmetered bulk path, caller-side gate, unescaped-quote JSON
-  failure, per-mode Q8/Q10 double-count) is recorded in `docs/decisions.md` 2026-07-14→17 entries —
-  each is pinned by a test; don't re-litigate.
+- **Don't re-run the Task-13 live comparison to "confirm"** — temp 0 doesn't make tries
+  identical (that's the finding); replay reproduces the graded run for free.
+- **Don't trust the old 60s Lyzr timeout**; it ate a credit once. Set `LYZR_TIMEOUT_SECONDS=180`
+  in `.env` before the live audit call — the audit message is ~4× the comparison message.
+- The full pre-Task-13 dead-end list is in `docs/decisions.md` 2026-07-14→17 entries, each
+  pinned by a test; don't re-litigate.
+- Gmail MCP token expired once mid-session; if mail is needed again and errors, Andy re-auths
+  via `/mcp` → claude.ai Gmail.
 
 ## Gotchas / carry-forward
-- **Severity ladder:** plausibility of the datum, NOT survivability (`CLAUDE.md`). The temp-71.2°F
-  case is a warning, and it's the Phase-1 anecdote — the *measured* headline is the Task-13
-  five-try result (see `for-review.md`; misses moved around between runs, which is itself the point).
-- **`db/queries.sql` must stay UPPERCASE** (hook-enforced) and `decisions.md` is append-only
-  (hook-enforced — reversals are new entries, never edits).
-- **Quarantined `.rejected` recordings are evidence, committed on purpose** — don't clean them up.
-- Replay is free and needs no `.env` key; only `--mode live` touches Lyzr, and it's ledger-gated
-  inside `LyzrValidator.validate` itself.
-- `payloads/`, `.env`, `ehr_triage.db` are gitignored — a fresh clone needs `.env` recreated
-  (Lyzr key + timeout) and data reloaded before live anything; replay + pytest work immediately.
+- **Report month is `2026-06` everywhere** (generator SEED 20260601, tests, demo commands).
+- **Message purity is load-bearing** for the auditor exactly as for the specialists: the audit
+  message is fingerprinted for replay — `sort_keys=True`, sorted corpus, no timestamps.
+- **Generator determinism is tested** (same seed → identical bytes). If a planted-rate test
+  fails, adjust the seed constant, not the assertions.
+- **Answer key terms ↔ grading tests are coupled** (`scripts/audit_answer_key.json` ↔
+  `tests/test_audit_grading.py`) — change them together.
+- **Bias framing rule** (spec + prompt): the auditor flags documentation bias IN THE DATA on a
+  synthetic corpus with planted defects; it does not diagnose people or accuse clinicians.
+- Severity ladder = plausibility of the datum, NOT survivability (`CLAUDE.md`).
+- `db/queries.sql` UPPERCASE keywords (hook), `decisions.md` append-only (hook), quarantined
+  `.rejected` recordings are committed evidence, `payloads/`/`.env`/`ehr_triage.db` gitignored.
+- Replay is free and needs no `.env` key; only `--mode live` touches Lyzr, ledger-gated.
+- The 5 canonical fixtures live in `tests/fixtures/payloads/`; the generated month will live in
+  `payloads/month/` (gitignored — the committed generator script recreates it byte-identically).
