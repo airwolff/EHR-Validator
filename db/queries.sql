@@ -169,3 +169,18 @@ SELECT
     SUM(CASE WHEN usable = 0 THEN 1 ELSE 0 END)                        AS tries_unusable
 FROM comparison_runs
 GROUP BY mode;
+
+-- ---------------------------------------------------------------------------
+-- Q12. FIELD MISSINGNESS BY RACE — THE DETERMINISTIC HALF OF THE BIAS FINDING.
+-- SQL counts the asymmetry; the month-end auditor's job is only to interpret it.
+-- ---------------------------------------------------------------------------
+SELECT
+    d.race,
+    COUNT(*) AS records,
+    SUM(CASE WHEN d.zip IS NULL OR d.zip = '' THEN 1 ELSE 0 END) AS missing_zip,
+    ROUND(100.0 * SUM(CASE WHEN d.zip IS NULL OR d.zip = '' THEN 1 ELSE 0 END)
+          / COUNT(*), 1) AS missing_zip_pct
+FROM record_demographics d
+JOIN validation_runs v ON v.payload_id = d.payload_id
+GROUP BY d.race
+ORDER BY missing_zip_pct DESC;

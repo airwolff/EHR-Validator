@@ -365,6 +365,61 @@ def get_worklist(batch_date):
     return rows
 
 
+def get_month_corpus(month):
+    """The month-end auditor's reading list: every record whose encounter_date falls in
+    YYYY-MM, with its note and demographic slice. Sorted by payload_id — the audit
+    message is fingerprinted, so iteration order here decides whether replay ever hits."""
+    out = []
+    with engine.connect() as conn:
+        rows = conn.execute(text(
+            "SELECT v.payload_id, v.payload_json, "
+            "       d.age, d.sex, d.race, d.zip, d.source_system "
+            "FROM validation_runs v "
+            "LEFT JOIN record_demographics d ON d.payload_id = v.payload_id "
+            "WHERE v.payload_json IS NOT NULL AND v.encounter_date LIKE :m || '-%' "
+            "ORDER BY v.payload_id"), {"m": month}).mappings()
+        for row in rows:
+            payload = json.loads(row["payload_json"])
+            if not isinstance(payload, dict):
+                continue
+            out.append({
+                "payload_id": row["payload_id"],
+                "demographics": {"age": row["age"], "sex": row["sex"], "race": row["race"],
+                                 "zip": row["zip"], "source_system": row["source_system"]},
+                "note": (payload.get("clinical_note") or ""),
+            })
+    return out
+
+
+def get_audit_aggregates(month):
+    """The deterministic layer's month-end summary — the auditor's OTHER input.
+    Everything sorted, because this text is fingerprinted (see get_month_corpus)."""
+    with engine.connect() as conn:
+        fields = [{"field": r["field"], "issues": r["n"]} for r in conn.execute(text(
+            "SELECT i.field AS field, COUNT(*) AS n "
+            "FROM validation_issues i JOIN validation_runs v ON v.run_id = i.run_id "
+            "WHERE v.encounter_date LIKE :m || '-%' "
+            "GROUP BY i.field ORDER BY n DESC, field"), {"m": month}).mappings()]
+        systems = [{"source_system": r["source_system"] or "unknown",
+                    "records": r["records"], "issues": r["issues"]}
+                   for r in conn.execute(text(
+            "SELECT v.source_system AS source_system, COUNT(DISTINCT v.run_id) AS records, "
+            "       COUNT(i.issue_id) AS issues "
+            "FROM validation_runs v LEFT JOIN validation_issues i ON i.run_id = v.run_id "
+            "WHERE v.encounter_date LIKE :m || '-%' "
+            "GROUP BY v.source_system ORDER BY v.source_system"), {"m": month}).mappings()]
+        zip_race = [{"race": r["race"] or "unknown", "records": r["records"],
+                     "missing_zip": r["missing_zip"]}
+                    for r in conn.execute(text(
+            "SELECT d.race AS race, COUNT(*) AS records, "
+            "       SUM(CASE WHEN d.zip IS NULL OR d.zip = '' THEN 1 ELSE 0 END) AS missing_zip "
+            "FROM record_demographics d JOIN validation_runs v ON v.payload_id = d.payload_id "
+            "WHERE v.encounter_date LIKE :m || '-%' "
+            "GROUP BY d.race ORDER BY d.race"), {"m": month}).mappings()]
+    return {"month": month, "top_failing_fields": fields,
+            "issues_by_source_system": systems, "missing_zip_by_race": zip_race}
+
+
 def get_stats():
     """Return summary stats for the /stats endpoint."""
     with engine.connect() as conn:
