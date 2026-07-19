@@ -19,11 +19,12 @@ import sys
 sys.path.insert(0, os.path.dirname(__file__))
 from app.validator import get_validator
 from app.router import route
-from app.store import init_db, save_report, save_reports_bulk
+from app.store import init_db, save_report, save_reports_bulk, demographics_from_payload, save_demographics
 
 
 def load_bulk(validator, path):
     items = []
+    demographics_rows = []
     with open(path) as f:
         for line in f:
             line = line.strip()
@@ -33,12 +34,14 @@ def load_bulk(validator, path):
             report = validator.validate(payload)
             source = payload.get("metadata", {}).get("source_system")
             items.append((report, source, route(report), payload))
+            demographics_rows.append(demographics_from_payload(report["payload_id"], payload))
     save_reports_bulk(items, model=validator.name)
+    save_demographics(demographics_rows)
     passed = sum(1 for r, _ in items if r["status"] == "pass")
     return len(items), passed
 
 
-def load_fixtures(validator, payload_dir):
+def load_fixtures(validator, payload_dir, demographics_rows):
     files = sorted(glob.glob(os.path.join(payload_dir, "payload_*.json")))
     for path in files:
         with open(path) as f:
@@ -48,6 +51,7 @@ def load_fixtures(validator, payload_dir):
         routing = route(report)
         run_id = save_report(report, model=validator.name, source_system=source,
                              routing=routing, payload=payload)
+        demographics_rows.append(demographics_from_payload(report["payload_id"], payload))
         print(f"  {os.path.basename(path):32s} -> {report['status']:4s}  "
               f"({report['issue_count']} issue(s))  {routing['domain']:8s} run_id={run_id}")
     return len(files)
@@ -70,9 +74,10 @@ def main():
     validator = get_validator(args.engine)
     bulk_path = os.path.join(args.payload_dir, "encounters.jsonl")
 
+    demographics_rows = []
     if args.fixtures or not os.path.exists(bulk_path):
         print(f"Loading canonical fixtures with engine '{validator.name}':\n")
-        n = load_fixtures(validator, args.payload_dir)
+        n = load_fixtures(validator, args.payload_dir, demographics_rows)
         print(f"\nLoaded {n} fixture(s).")
     else:
         print(f"Loading bulk dataset with engine '{validator.name}'...")
@@ -80,6 +85,7 @@ def main():
         print(f"  processed {total} encounters: {passed} pass, {total - passed} fail "
               f"({round(100.0 * passed / total, 1)}% clean)")
 
+    save_demographics(demographics_rows)
     print("\nDone. Query with: sqlite3 ehr_triage.db < db/queries.sql")
 
 

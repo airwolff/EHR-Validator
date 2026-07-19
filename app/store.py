@@ -113,6 +113,19 @@ comparison_results = Table(
     # outcome: caught | severity_mismatch | missed | false_alarm
 )
 
+# The month-end auditor's demographic lens. Filled by the loader, queried by Q12 and
+# get_audit_aggregates. A separate table (not JSON functions over payload_json) so the
+# missingness-by-demographic COUNT is honestly SQL's catch, not Python's.
+record_demographics = Table(
+    "record_demographics", metadata,
+    Column("payload_id",    String, primary_key=True),
+    Column("age",           Integer),
+    Column("sex",           String),
+    Column("race",          String),
+    Column("zip",           String),
+    Column("source_system", String),
+)
+
 # Worklist precedence. Deliberately separate from router.DOMAIN_PRIORITY: that one picks
 # a record's primary domain, this one sorts a human's queue.
 # Every domain router.py can emit must appear here. A domain missing from this map sorts
@@ -193,6 +206,32 @@ def save_reports_bulk(items, model):
         for report, source_system, routing, payload in items:
             _insert_report(conn, report, model, source_system, routing, payload)
     return len(items)
+
+
+def demographics_from_payload(payload_id, payload):
+    """The demographic slice the auditor and Q12 see. Pure; missing fields are None,
+    because 'missing' is precisely the signal the missingness queries count."""
+    patient = (payload or {}).get("patient") or {}
+    metadata = (payload or {}).get("metadata") or {}
+    return {
+        "payload_id": payload_id,
+        "age": patient.get("age"),
+        "sex": patient.get("sex"),
+        "race": patient.get("race"),
+        "zip": patient.get("zip"),
+        "source_system": metadata.get("source_system"),
+    }
+
+
+def save_demographics(rows):
+    """Write demographic rows. Delete-then-insert per payload_id in one transaction,
+    so a re-load replaces rather than duplicates — same manners as save_comparison_run."""
+    with engine.begin() as conn:
+        for r in rows:
+            conn.execute(record_demographics.delete().where(
+                record_demographics.c.payload_id == r["payload_id"]))
+            conn.execute(record_demographics.insert().values(**r))
+    return len(rows)
 
 
 def record_agent_result(run_id, findings, batch_date):
