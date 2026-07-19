@@ -184,3 +184,15 @@ FROM record_demographics d
 JOIN validation_runs v ON v.payload_id = d.payload_id
 GROUP BY d.race
 ORDER BY missing_zip_pct DESC;
+
+-- ---------------------------------------------------------------------------
+-- Q13. MONTH-END AUDITOR SCORECARD: PER PLANTED PATTERN, DID THE AUDITOR CATCH IT?
+-- ---------------------------------------------------------------------------
+SELECT
+    g.planted_key,
+    g.outcome,
+    p.name AS matched_pattern
+FROM audit_grades g
+JOIN audit_reports r ON r.report_id = g.report_id
+LEFT JOIN audit_patterns p ON p.pattern_id = g.matched_pattern_id
+ORDER BY g.planted_key;

@@ -210,7 +210,7 @@ def run_month_end_audit(month, *, mode="replay", recordings_dir, agent_id=None,
 
 
 def main(argv=None):
-    """python -m app.agents.audit --month 2026-06 [--mode replay|live]"""
+    """python -m app.agents.audit --month 2026-06 [--mode replay|live] [--grade]"""
     import argparse
     try:
         from dotenv import load_dotenv
@@ -226,6 +226,8 @@ def main(argv=None):
     parser.add_argument("--month", required=True, help="Report month, YYYY-MM.")
     parser.add_argument("--mode", choices=["replay", "live"], default="replay")
     parser.add_argument("--recordings", default=recordings_dir())
+    parser.add_argument("--grade", action="store_true",
+                        help="Grade the persisted audit against the answer key.")
     args = parser.parse_args(argv)
     try:
         store.ensure_tables()
@@ -236,6 +238,9 @@ def main(argv=None):
                       or os.environ.get("LYZR_BATCH_AGENT_ID")
                       or os.environ.get("LYZR_AGENT_ID")),
             ledger=ledger)
+        if args.grade:
+            from app.agents.audit_grading import grade_persisted_report
+            result["grades"] = grade_persisted_report(args.month, args.mode)
     except (AuditAborted, FileNotFoundError, LedgerError, TransportError,
             ValueError) as exc:
         raise SystemExit(f"audit refused: {exc}") from exc
