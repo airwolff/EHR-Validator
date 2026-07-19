@@ -1,0 +1,17 @@
+{
+  "report_month": "2026-06",
+  "planted": [
+    {"key": "unit_conversion_meditech",
+     "terms": ["celsius", "unit", "conversion", "meditech", "fahrenheit"],
+     "what": "MEDITECH temp_f values are Celsius from 2026-06-15 on (records M031-M040 subset)"},
+    {"key": "copy_paste_note",
+     "terms": ["copied", "copy-paste", "duplicate", "template", "same text", "identical"],
+     "what": "One counseling fragment, lightly paraphrased, across 5 unrelated patients"},
+    {"key": "gender_tone_bias",
+     "terms": ["women", "female", "dismissive", "anxious", "tone", "bias", "language"],
+     "what": "Matched chest-pain pairs: female notes get dismissive language, male notes get workup language"},
+    {"key": "race_missing_zip",
+     "terms": ["missing", "zip", "race", "black", "incomplete", "completeness"],
+     "what": "Black patients' records are missing zip far more often (SQL Q12 counts it; auditor interprets)"}
+  ]
+}
