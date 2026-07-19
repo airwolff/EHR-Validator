@@ -119,6 +119,25 @@ Live tracker for the current phase. Tick a box only when **verified by running i
         committed 47d2868 — the whole comparison replays offline. Analytics SQL in
         `db/queries.sql` (miss rate, scorecard, confusion, reliability — 3910cb1).
         See `docs/decisions.md` (2026-07-17).
+  - [x] **Task 14 (new, 2026-07-19): month-end auditor agent, one call over the whole synthetic
+        month, graded against a planted answer key.** *Verified by running: synthetic month
+        2026-06 generated (SEED 20260601, 40 records) — 6 rule-caught failures, exactly the
+        MEDITECH Celsius records (M006, M012, M018, M024, M030, M036); Q12 measured Black
+        patients 8/10 (80%) missing zip vs. 0/10 for White, Hispanic, and Asian. Two live runs
+        (2 credits, ledger 12/15, 3 remain): both replies failed their own JSON contract the same
+        way — an unescaped double-quote inside a "quote" string value citing the AGGREGATES JSON
+        block — and both were auto-quarantined by the abort path with nothing persisted (first
+        quarantined reply committed as evidence, e379327). Rather than spend a third credit, a
+        targeted parse repair (`_repair_quote_values`, 3cc3dde) was TDD-pinned against the real
+        quarantined reply; the second live recording was then un-quarantined and read as-is — the
+        recording itself was never edited. Replay of the genuine live reply: 4 patterns returned,
+        4 kept, 0 evidence dropped, 0 credits — **4/4 planted patterns caught**
+        (unit_conversion_meditech, copy_paste_note, gender_tone_bias, race_missing_zip), 1
+        invented (grader footnote: copy_paste_note matched the gender-bias pattern on a term tie —
+        "identical" + "template" appear in both — so the templated-note-text pattern is the one
+        counted invented). Replay re-run reproduces identical counts and grades. Full suite: 210
+        passed.* Feature commits: e95a2de, 105c39e, 71a050f, 74efd8e, cc658f7, e85b2be, bec8eaa,
+        e379327, 3cc3dde, aad5716. See `docs/decisions.md` (2026-07-19).
 - [ ] **LLM escalation** — escalated records only → Lyzr → plain-English summary + cross-field
       contradiction detection (NOT re-validation). Test on fixtures only (credit budget)
 - [ ] **Postgres swap + Render deploy** — same SQLAlchemy Core code, switch DB URL (gated by OQ#3)

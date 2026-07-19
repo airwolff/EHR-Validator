@@ -502,3 +502,41 @@ key — it does not diagnose people or accuse clinicians. · **Refs:**
 `docs/superpowers/specs/2026-07-18-month-end-auditor-design.md` (0494f7f),
 `docs/superpowers/plans/2026-07-18-month-end-auditor.md` (80cb847), `docs/for-review.md`,
 Mahima's Jul 1 + Jul 16 emails (requirements + reschedule).
+
+## 2026-07-19 — Month-end auditor: built, graded, and its own two failures became the demo
+
+**Decision:** the auditor is done. Why it exists: the specialists read one record at a time; the
+auditor reads the whole month at once, which finds things a `GROUP BY` cannot — root causes,
+duplication across records, documentation bias in the language, not just the numbers. One-call
+design: the whole month (SQL aggregates + full note corpus) goes into a single fingerprinted
+message, so a replay is free and reproducible — nothing to re-derive, nothing to re-pay for.
+Grading is a committed, deliberately simple answer key checked by a dumb term-count grader anyone
+can re-run and read by eye — no LLM judging an LLM. Bias framing rule, stated once so it stays
+true: the auditor flags documentation bias **in the synthetic data**, against a known planted
+answer, and it does not diagnose people or accuse clinicians. Measured: synthetic month 2026-06
+(SEED 20260601), 40 records, 6 rule-caught failures — exactly the MEDITECH Celsius records (M006,
+M012, M018, M024, M030, M036); Q12 measured Black patients 8/10 (80%) missing zip against 0/10 for
+White, Hispanic, and Asian. Two live runs cost 2 credits (ledger 12/15, 3 remain) and **both**
+replies broke their own JSON contract the same way — an unescaped double-quote inside a "quote"
+string value while citing the AGGREGATES JSON block — and both were auto-quarantined by the abort
+path with nothing persisted; the first quarantined reply is committed as evidence (e379327). The
+new decision: rather than spend a third credit, a targeted parse repair (`_repair_quote_values`,
+3cc3dde) was TDD-pinned against the real quarantined reply, and the second live recording was then
+un-quarantined and read as-is — the recording file itself was never edited. Replaying the genuine
+live reply: 4 patterns returned, 4 kept, 0 evidence dropped, 0 credits — **4/4 planted patterns
+caught** (unit_conversion_meditech, copy_paste_note, gender_tone_bias, race_missing_zip), 1
+invented (grader footnote: copy_paste_note term-matched the gender-bias pattern on a tie —
+"identical" and "template" appear in both — so the fourth pattern, templated note text, is the one
+counted invented). Re-running the replay reproduces identical counts and grades. Full suite: 210
+passed. · **Status:** accepted · **Why:** this is the same argument as the Task-12 JSON-escape
+fix, one level up — the deterministic guard (parse, then abort-and-quarantine) caught the LLM
+breaking its own output contract, twice, and did the right thing both times: nothing corrupted was
+persisted, nothing was silently swallowed. A parse-time repair pinned by tests against the actual
+failure is a smaller, cheaper, and more honest fix than paying for a third try and hoping for a
+cleaner reply. · **Consequences:** the two quarantines and the repair are themselves thesis
+evidence, not an embarrassment to smooth over — they are one more measured instance of "the LLM
+silently (or not so silently) drops or breaks things a deterministic layer catches." Ledger at
+12/15 for the month, 3 credits remain. · **Refs:** `app/agents/auditor.py` (or equivalent),
+`_repair_quote_values` (3cc3dde), `app/agents/recordings/` (auditor recordings, incl. quarantined
+evidence e379327), commits e95a2de, 105c39e, 71a050f, 74efd8e, cc658f7, e85b2be, bec8eaa, e379327,
+3cc3dde, aad5716, `docs/for-review.md`, `docs/phase-checklist.md` Task 14.

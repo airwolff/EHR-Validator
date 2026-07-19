@@ -50,6 +50,20 @@ New up top; resolved → bottom.
 - **Do NOT add an LLM router** to look more agentic. A deterministic router already picks the domain
   correctly; replacing it with a model would put an LLM exactly where rules *do* reach — the practice
   this whole presentation criticises. It would undermine the thesis to win a buzzword.
+- **Month-end auditor (Task 14, live-measured 2026-07-19): one more clean split, plus a live
+  double-failure that IS the demo.** Synthetic month 2026-06, 40 records: SQL gets first crack at
+  everything a `GROUP BY` can express (6 rule-caught MEDITECH-Celsius failures; Q12 measured 8/10
+  Black patients missing zip vs. 0/10 for White, Hispanic, Asian). The auditor is credited only for
+  what SQL can't do — root causes, cross-record duplication, documentation-bias tone — one call over
+  the whole month, graded against a committed planted answer key with a deliberately dumb term-count
+  grader. Replayed result: **4/4 planted patterns caught** (unit-conversion root cause, copy-paste
+  note propagation, gender tone bias, race-correlated missing zip), 1 invented (a term-tie footnote,
+  not a fabrication). But the live path is the sharper story: **both** live replies broke their own
+  JSON contract the same way (an unescaped quote inside a cited JSON block) and were both
+  auto-quarantined — nothing corrupted persisted, nothing silently swallowed, 2 credits spent
+  learning it. Fixed with a targeted, test-pinned parse repair, not a third credit and not editing
+  the recording. Same slide as the Task-12 escape-rule story, one level up: **the deterministic guard
+  caught the LLM breaking its output contract, twice, live.**
 
 ## Open / to raise
 - Web UI scope + stats-panel contents (see open-questions #1/#2).
@@ -67,6 +81,9 @@ New up top; resolved → bottom.
   Starter never became necessary. That scarcity is why record/replay + the ledger exist. **Keep
   both: they are engineering artifacts, not credit workarounds.** See `docs/decisions.md`
   (2026-07-13, 2026-07-17).
+- **Ledger after Task 14 (2026-07-19): 12/15, 3 credits remain this month.** Two live auditor calls,
+  both quarantined for a broken JSON contract; a parse repair fixed the second reply for free rather
+  than spending a third credit. See `docs/decisions.md` (2026-07-19).
 
 ## Resolved
 _(move here as items close, with date)_
