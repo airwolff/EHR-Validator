@@ -145,3 +145,102 @@ def ground_patterns(patterns, sources):
             dropped.append({"pattern": p["name"], "evidence": None,
                             "reasons": ["no_surviving_evidence"]})
     return kept, dropped
+
+
+import os
+import re
+
+from app import store
+from app.agents.transport import get_response, quarantine_recording
+
+AUDITOR = "auditor"
+MONTH_KEY = re.compile(r"^\d{4}-\d{2}$")
+
+
+class AuditAborted(RuntimeError):
+    """The auditor's reply could not be read; nothing was persisted. Run it again —
+    same contract as BatchAborted, and the same reason it is fatal."""
+
+    def __init__(self, message, credits_spent=0):
+        super().__init__(message)
+        self.credits_spent = credits_spent
+
+
+def run_month_end_audit(month, *, mode="replay", recordings_dir, agent_id=None,
+                        ledger=None):
+    """One month-end audit: aggregates + corpus → one call → ground → persist.
+
+    Returns {"report": kept_patterns, "dropped": [...], "counts": {"records",
+    "patterns_returned", "patterns_kept", "evidence_dropped", "credits_spent"}}.
+    """
+    if not MONTH_KEY.match(str(month)):
+        raise ValueError(f"month must be YYYY-MM, got {month!r}.")
+    corpus = store.get_month_corpus(month)
+    if not corpus:
+        raise ValueError(
+            f"No records with encounter_date in {month} — load the month first "
+            f"(scripts/generate_month.py then load_results.py).")
+
+    aggregates = store.get_audit_aggregates(month)
+    message = build_audit_message(aggregates, corpus)
+
+    spent_before = ledger.spent() if ledger is not None else 0
+    raw = get_response(AUDITOR, message, mode=mode, recordings_dir=recordings_dir,
+                       agent_id=agent_id, ledger=ledger)
+    credits_spent = (ledger.spent() - spent_before) if ledger is not None else 0
+
+    try:
+        patterns = parse_audit_report(raw)
+    except ResponseUnparseable as exc:
+        rejected = quarantine_recording(recordings_dir, AUDITOR, message)
+        raise AuditAborted(
+            f"The auditor's reply could not be read. Nothing was persisted; run it "
+            f"again. The bad reply was quarantined ({rejected}). ({exc})",
+            credits_spent=credits_spent) from None
+
+    sources = {c["payload_id"]: c["note"] for c in corpus}
+    sources[AGGREGATES_ID] = aggregates_text(aggregates)
+    kept, dropped = ground_patterns(patterns, sources)
+
+    counts = {"records": len(corpus), "patterns_returned": len(patterns),
+              "patterns_kept": len(kept), "evidence_dropped": len(dropped),
+              "credits_spent": credits_spent}
+    store.save_audit_report(month, mode, kept, counts)
+    return {"report": kept, "dropped": dropped, "counts": counts}
+
+
+def main(argv=None):
+    """python -m app.agents.audit --month 2026-06 [--mode replay|live]"""
+    import argparse
+    try:
+        from dotenv import load_dotenv
+        load_dotenv()
+    except ImportError:
+        pass
+    from app.agents.ledger import CreditLedger, LedgerError, ledger_path
+    from app.agents.transport import TransportError, recordings_dir
+
+    parser = argparse.ArgumentParser(
+        prog="python -m app.agents.audit",
+        description="Month-end audit: one LLM call over the month's aggregates + notes.")
+    parser.add_argument("--month", required=True, help="Report month, YYYY-MM.")
+    parser.add_argument("--mode", choices=["replay", "live"], default="replay")
+    parser.add_argument("--recordings", default=recordings_dir())
+    args = parser.parse_args(argv)
+    try:
+        store.ensure_tables()
+        ledger = CreditLedger(ledger_path()) if args.mode == "live" else None
+        result = run_month_end_audit(
+            args.month, mode=args.mode, recordings_dir=args.recordings,
+            agent_id=(os.environ.get("LYZR_AUDIT_AGENT_ID")
+                      or os.environ.get("LYZR_BATCH_AGENT_ID")
+                      or os.environ.get("LYZR_AGENT_ID")),
+            ledger=ledger)
+    except (AuditAborted, FileNotFoundError, LedgerError, TransportError,
+            ValueError) as exc:
+        raise SystemExit(f"audit refused: {exc}") from exc
+    print(json.dumps(result, indent=2))
+
+
+if __name__ == "__main__":
+    main()

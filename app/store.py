@@ -126,6 +126,40 @@ record_demographics = Table(
     Column("source_system", String),
 )
 
+# The month-end auditor's output. Same table-per-engine reasoning as agent_findings:
+# at demo time the auditor's patterns are their own table, joined not untangled.
+audit_reports = Table(
+    "audit_reports", metadata,
+    Column("report_id",         Integer, primary_key=True, autoincrement=True),
+    Column("report_month",      String,  nullable=False),
+    Column("mode",              String,  nullable=False),   # live | replay
+    Column("ran_at",            String,  nullable=False),
+    Column("patterns_returned", Integer, nullable=False),
+    Column("patterns_kept",     Integer, nullable=False),
+    Column("evidence_dropped",  Integer, nullable=False),
+    Column("credits_spent",     Integer, nullable=False, default=0),
+)
+
+audit_patterns = Table(
+    "audit_patterns", metadata,
+    Column("pattern_id",         Integer, primary_key=True, autoincrement=True),
+    Column("report_id",          Integer, nullable=False),
+    Column("name",               String,  nullable=False),
+    Column("severity",           String,  nullable=False),
+    Column("hypothesis",         Text,    nullable=False),
+    Column("recommended_action", Text,    nullable=False),
+    Column("evidence_json",      Text,    nullable=False),
+)
+
+audit_grades = Table(
+    "audit_grades", metadata,
+    Column("grade_id",           Integer, primary_key=True, autoincrement=True),
+    Column("report_id",          Integer, nullable=False),
+    Column("planted_key",        String,  nullable=False),
+    Column("outcome",            String,  nullable=False),  # caught | partial | missed
+    Column("matched_pattern_id", Integer),
+)
+
 # Worklist precedence. Deliberately separate from router.DOMAIN_PRIORITY: that one picks
 # a record's primary domain, this one sorts a human's queue.
 # Every domain router.py can emit must appear here. A domain missing from this map sorts
@@ -323,6 +357,37 @@ def save_comparison_run(run_number, mode, permutation, usable, results, dropped_
                 )
             )
     return cid
+
+
+def save_audit_report(month, mode, kept, counts):
+    """Persist one month-end audit. Re-running the same month+mode REPLACES the old
+    report, its patterns AND its grades — same reasoning as save_comparison_run."""
+    now = _utc_now()
+    with engine.begin() as conn:
+        old = conn.execute(audit_reports.select().where(
+            (audit_reports.c.report_month == month) & (audit_reports.c.mode == mode))
+        ).mappings().all()
+        old_ids = [r["report_id"] for r in old]
+        if old_ids:
+            conn.execute(audit_grades.delete().where(
+                audit_grades.c.report_id.in_(old_ids)))
+            conn.execute(audit_patterns.delete().where(
+                audit_patterns.c.report_id.in_(old_ids)))
+            conn.execute(audit_reports.delete().where(
+                audit_reports.c.report_id.in_(old_ids)))
+        report_id = conn.execute(audit_reports.insert().values(
+            report_month=month, mode=mode, ran_at=now,
+            patterns_returned=counts["patterns_returned"],
+            patterns_kept=counts["patterns_kept"],
+            evidence_dropped=counts["evidence_dropped"],
+            credits_spent=counts["credits_spent"],
+        )).inserted_primary_key[0]
+        for p in kept:
+            conn.execute(audit_patterns.insert().values(
+                report_id=report_id, name=p["name"], severity=p["severity"],
+                hypothesis=p["hypothesis"], recommended_action=p["recommended_action"],
+                evidence_json=json.dumps(p["evidence"], sort_keys=True)))
+    return report_id
 
 
 def get_noted_records():
