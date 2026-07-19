@@ -72,6 +72,29 @@ def test_malformed_pattern_drops():
     assert kept == [] and "malformed" in dropped[0]["reasons"]
 
 
+def test_malformed_evidence_item_string_drops_with_reason():
+    """Evidence item that is a bare string (not dict) gets dropped with malformed_evidence."""
+    p = _pattern(evidence=["appears anxious"])
+    kept, dropped = audit.ground_patterns([p], _sources())
+    assert kept == []
+    # Dropped has 2 entries: the malformed evidence item and the pattern with no_surviving_evidence
+    malformed_drops = [d for d in dropped if "malformed_evidence" in d["reasons"]]
+    assert len(malformed_drops) == 1
+    assert any("no_surviving_evidence" in d["reasons"] for d in dropped)
+
+
+def test_malformed_evidence_mixed_valid_dict_and_string():
+    """Pattern with one valid dict item and one string item: string drops, dict survives."""
+    p = _pattern(evidence=[{"record_id": "P-A", "quote": "appears anxious"},
+                           "bare string item"])
+    kept, dropped = audit.ground_patterns([p], _sources())
+    assert len(kept) == 1 and len(kept[0]["evidence"]) == 1
+    assert kept[0]["evidence"][0]["quote"] == "appears anxious"
+    # Bare string should appear in dropped with malformed_evidence reason
+    malformed_drops = [d for d in dropped if "malformed_evidence" in d["reasons"]]
+    assert len(malformed_drops) == 1
+
+
 def test_parse_tolerates_fences_and_raises_on_prose():
     raw = '```json\n{"patterns": [' + str(_pattern()).replace("'", '"') + ']}\n```'
     assert len(audit.parse_audit_report(raw)) == 1

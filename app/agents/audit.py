@@ -124,6 +124,10 @@ def ground_patterns(patterns, sources):
             continue
         good = []
         for item in p["evidence"]:
+            if not isinstance(item, dict):
+                dropped.append({"pattern": p["name"], "evidence": item,
+                                "reasons": ["malformed_evidence"]})
+                continue
             rid = (item or {}).get("record_id")
             quote = (item or {}).get("quote")
             source = sources.get(rid)
