@@ -3,8 +3,8 @@
 # It tells you where you are and runs the right demo when you swipe to the terminal.
 # Run setup.sh FIRST (off camera), then start this, then press record.
 set -uo pipefail
-cd "$(dirname "$0")/../.."
-HERE="$(dirname "$0")"
+HERE="$(cd "$(dirname "$0")" && pwd)"   # absolute path to this folder, however it was invoked
+cd "$HERE/../.."                        # repo root
 
 banner(){ printf '\n\033[1;36m========================================================\n%s\n========================================================\033[0m\n' "$1"; }
 wait_enter(){ printf '\033[1;33m%s\033[0m' "$1"; read -r _; }
