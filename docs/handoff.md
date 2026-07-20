@@ -12,6 +12,9 @@ for how to use/update this file.
 - **Boots?** Yes — `python -c "import app.main"` → `boots` (verified 2026-07-19)
 - **Staleness test:** if HEAD moved past the docs commit or `git status -s` differs, trust git +
   code and rewrite this early.
+- **Push state:** NOT pushed — GitHub was unreachable from Andy's machine at session end
+  (curl to github.com timed out; not a credentials issue). `main` is ~15 ahead of origin;
+  Andy pushes first thing. If `git status -sb` still shows ahead, run `git push origin main`.
 
 ## Where we are
 
