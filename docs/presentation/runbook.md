@@ -12,6 +12,36 @@ Segments, in recording order:
 
 ---
 
+## THE TAKE SHEET — the whole run, in order
+
+One pass, no editing. Narration is `script.md`; this is the spine that tells you when to swipe
+and what to type. Time marks are cumulative at 140 wpm and assume you don't linger — treat them
+as a pace check, not a schedule. **Requirement is 15:00; the full script runs 15:44, so if
+you're behind at slide 5 you're not making it up later.**
+
+| # | Where | Do | End of section |
+|---|---|---|---|
+| 1 | **Deck** | Slide 1 — Project Objective (the 71.2 story) | 2:30 |
+| 2 | **Deck** | Slide 2 — Two ways to check a record; the night shift; the Claude Code disclosure | 4:39 |
+| 3 | **Deck** | Slide 3 — set up the wrong-patient record, *then* **SWIPE →** | |
+| | **Terminal** | `1a` local validator on the wow payload (0 issues) → `1b` nightly batch | |
+| | | narrate over output, then **← SWIPE back** | 7:13 |
+| 4 | **Deck** | Slide 4 — the five-run test, the four scoring words, the answer-key objection, *then* **SWIPE →** | |
+| | **Terminal** | `compare --runs 5 --mode replay` → sqlite3: Q8, Q9 | |
+| | | narrate over output, then **← SWIPE back** | 10:22 |
+| 5 | **Deck** | Slide 5 — the month-end auditor, SQL first, the framing rule, *then* **SWIPE →** | |
+| | **Terminal** | **Step B** (`generate_month.py`) → **Step C** (load June) → `audit --grade` → sqlite3: Q12, Q13 | |
+| | | narrate over output, then **← SWIPE back** | 12:49 |
+| 6 | **Deck** | Slide 6 — Key Outcomes (short, 57 words — don't pad it) | 13:13 |
+| 7 | **Deck** | Slide 7 — the guard caught the AI twice | 14:08 |
+| 8 | **Deck** | Slide 8 — Way Forward | 15:13 |
+| 9 | **Deck** | Slide 9 — Close, repo on screen | 15:44 |
+
+Three swipes out, three swipes back. Steps B and C are the only setup that happens on camera —
+they cannot be pre-staged (see the order rule below).
+
+---
+
 ## RECORDING FORMAT: ONE CONTINUOUS TAKE
 
 Decided 2026-07-20. The deck lives on one macOS desktop, the terminal on another, and the
@@ -240,13 +270,15 @@ shape plus the counts block):**
 }
 ```
 
-**Say on camera:** all 4 findings are on `E-WOW-01`, all `critical`, all zero rule issues a
-moment ago. Two specialists caught the same patient-identity mismatch independently — the
-identity specialist (`patient.*`) and the clinical specialist (`patient_context.*`), which
-is why the worklist shows `domain: identity` twice and `domain: clinical` twice rather than
-"4 identity" — both readings are the same underlying error (a note copied from a 62-year-old
-male patient onto a 34-year-old female patient's chart), caught from two angles.
-`credits_spent: 0` — this is replay.
+**What to point at** (narration is in `script.md` — this is just what's on screen):
+
+- all 4 findings are on `E-WOW-01`, all `critical`, on the record that had 0 rule issues a
+  moment ago
+- the **domain column**: `identity` twice (`patient.*`), `clinical` twice
+  (`patient_context.*`) — two agents, same underlying error, caught independently. Never say
+  "4 identity findings"; it's **one** wrong-patient defect seen from two angles.
+- the **evidence string** on the sex finding — quoted verbatim, checker-confirmed
+- `dropped: 0` and `credits_spent: 0`
 
 **Fallback still-shot:** the `worklist` array above, screenshotted before scrolling past it.
 
@@ -278,9 +310,8 @@ per-finding detail and a totals block):**
 }
 ```
 
-**Say on camera:** temperature is 0, same 15 planted issues every try — and the count the
-LLM reports still moves try to try (12–15 caught, 0–7 false alarms). That's the reliability
-argument before you even get to the accuracy one.
+**What to point at:** the per-run counts moving — 14, 14, 15, 14, 12 caught; 0, 0, 7, 4, 0
+false alarms. Same records, temperature 0, only the order changed.
 
 ### Then, in the sqlite3 shell: Q8 and Q9
 
@@ -350,9 +381,12 @@ replay  payload_missing_fields  patient.dob                 critical       0    
 ...
 ```
 
-**Say on camera:** every row here is a rule the deterministic validator catches 5 of 5
-times, 100% reproducible — and this table is where the "X of N tries" sentence for the
-presentation comes from.
+**What to point at:** that this table is SQL over the saved results, not a summary. Every row
+in it is a rule the validator catches 5 of 5 times.
+
+The per-problem detail (facility NPI downgraded 2 of 5, timestamp missed 1 of 5) was **cut
+from the spoken script for time** — it's in the if-asked list at the bottom of `script.md`.
+Don't narrate it; just let the table be on screen.
 
 `.quit` to leave the sqlite3 shell.
 
@@ -447,11 +481,16 @@ hypothesis):**
 }
 ```
 
-**Say on camera:** all 4 planted patterns caught, `credits_spent: 0` (replay). Note honestly
-on camera: `copy_paste_note` and `gender_tone_bias` both grade against
-`matched_index: 2` — the auditor's "Gender-biased chest pain" pattern is broad enough to
-cover both plants, and the grader isn't set up to split credit. Don't oversell this as two
-clean independent catches; say what the number says.
+**What to point at:** the four pattern names, `4 of 4` caught, `0` dropped for bad evidence,
+`credits_spent: 0`.
+
+**Changed 2026-07-20 — do NOT narrate the grader caveat.** The earlier version of this doc
+told you to say on camera that `copy_paste_note` and `gender_tone_bias` both grade against
+`matched_index: 2` (the auditor's "Gender-biased chest pain" pattern is broad enough to cover
+both plants, and the grader can't split credit). That is still true and still worth saying —
+but it was **cut from the spoken script for time** and moved to the if-asked list at the
+bottom of `script.md`. Have it ready for Mahima's feedback session; keep it out of the take.
+`4 of 4 caught` is accurate as stated.
 
 ### Then, in the sqlite3 shell: Q12 and Q13
 
