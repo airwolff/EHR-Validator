@@ -238,29 +238,29 @@
   <!-- ================= SLIDE 1 — Project Objective ================= -->
   <section class="slide active">
     <p class="eyebrow">Project Objective</p>
-    <h1>EHR Data Quality Triage Pipeline<small>two validation engines, one output contract, SQL over everything</small></h1>
+    <h1>EHR Data Quality Triage Pipeline<small>catching bad hospital data at the front door</small></h1>
     <div class="cols">
       <div class="col" style="flex:0 0 560px; justify-content:center;">
         <div>
           <div class="hero-num">71.2<span class="hero-unit">°F</span></div>
-          <p class="hero-cap">A Claude-based validator called this record fine. A one-line Python rule caught it instantly.</p>
+          <p class="hero-cap">Body temperature. Normal is 98.6 — at 71 you are dead. A Claude validator at temperature 0, with a long strict prompt, called this record fine. One line of ordinary Python caught it instantly.</p>
         </div>
       </div>
       <div class="col" style="flex:1; justify-content:center;">
         <div class="flowline">
-          <span>JSON record</span><span class="arr">→</span>
-          <span>validator</span><span class="arr">→</span>
-          <span>{field · problem · severity · remediation}</span><span class="arr">→</span>
-          <span>DB</span><span class="arr">→</span>
-          <span>SQL trends</span>
+          <span>a patient record</span><span class="arr">→</span>
+          <span>something inspects it</span><span class="arr">→</span>
+          <span>what's broken · what's wrong · how bad · how to fix</span><span class="arr">→</span>
+          <span>database</span><span class="arr">→</span>
+          <span>SQL finds trends</span>
         </div>
         <div class="card">
-          <h3>Severity, defined once</h3>
-          <p><strong>Plausibility of the datum — not patient survivability.</strong> SpO2&nbsp;&gt;&nbsp;100 is critical because it is impossible data.</p>
+          <h3>One word, defined</h3>
+          <p><strong>Severity = is this number believable?</strong> Not: is the patient in danger. Blood oxygen above 100% is critical because 100 is the maximum — it's impossible data.</p>
         </div>
         <div class="card edge-rules">
-          <h3>The thesis</h3>
-          <p>For fixed, well-specified rules, <strong class="rules-ink">deterministic Python is the correct tool</strong> — faster, cheaper, auditable. <strong class="agent-ink">The LLM exists only for what rules can't reach</strong>: unstructured text, cross-field contradictions, patterns across records.</p>
+          <h3>The claim I'll back with measurements</h3>
+          <p>When the rule is simple and you already know it, <strong class="rules-ink">plain code wins</strong> — faster, cheaper, same answer every time. <strong class="agent-ink">The AI is for the jobs code can't do</strong>: reading the doctor's notes, catching two things that contradict each other, spotting a pattern nobody wrote a rule for.</p>
         </div>
       </div>
     </div>
@@ -269,74 +269,75 @@
   <!-- ================= SLIDE 2 — Architecture ================= -->
   <section class="slide">
     <p class="eyebrow">Architecture</p>
-    <h1>Two engines, one contract</h1>
+    <h1>Two ways to check a record<small>same record in · same shape of answer out</small></h1>
     <div class="diagram">
       <div class="dg-row">
-        <div class="dg-box" style="flex:0.8;">Record<span class="sub mono">JSON</span></div>
+        <div class="dg-box" style="flex:0.8;">A record<span class="sub mono">JSON</span></div>
         <div class="dg-arr">→</div>
         <div class="dg-stack">
-          <div class="dg-box dg-rules">Deterministic validator<span class="sub">Python rules</span></div>
-          <div class="dg-box dg-agent">Lyzr agent<span class="sub">Claude Sonnet · temp 0 · record/replay</span></div>
+          <div class="dg-box dg-rules">Rules I wrote by hand<span class="sub">plain Python</span></div>
+          <div class="dg-box dg-agent">An AI agent<span class="sub">Claude Sonnet · temp 0 · every call saved and replayable</span></div>
         </div>
         <div class="dg-arr">→</div>
-        <div class="dg-box" style="flex:1.2;">One JSON contract<span class="sub mono">status · issues[field, problem, severity, remediation]</span></div>
+        <div class="dg-box" style="flex:1.2;">Both fill in the same form<span class="sub mono">what's broken · what's wrong · how bad · how to fix</span></div>
         <div class="dg-arr">→</div>
-        <div class="dg-box">SQLite / Postgres<span class="sub">SQLAlchemy Core · FastAPI</span></div>
+        <div class="dg-box">One database<span class="sub">SQLite now, Postgres on a server later — same code</span></div>
         <div class="dg-arr">→</div>
-        <div class="dg-box" style="flex:0.8;">SQL analytics</div>
+        <div class="dg-box" style="flex:0.8;">SQL over everything</div>
       </div>
       <div class="dg-band">
-        <p class="dg-band-label">Nightly agent crew — no human kicks it off</p>
+        <p class="dg-band-label">The night shift — runs on its own, nobody presses a button</p>
         <div class="dg-row">
-          <div class="dg-box dg-rules">Router<span class="sub">deterministic — assigns each record a domain</span></div>
+          <div class="dg-box dg-rules">Sorter<span class="sub">decides who should read each record</span></div>
           <div class="dg-arr">→</div>
           <div class="dg-stack">
-            <div class="dg-box dg-agent">Clinical specialist</div>
-            <div class="dg-box dg-agent">Identity specialist</div>
+            <div class="dg-box dg-agent">Clinical specialist<span class="sub">does the medicine make sense?</span></div>
+            <div class="dg-box dg-agent">Identity specialist<span class="sub">is this even the right person?</span></div>
           </div>
           <div class="dg-arr">→</div>
-          <div class="dg-box dg-rules">Grounding guard<span class="sub">drops any finding whose quoted evidence isn't verbatim in the note</span></div>
+          <div class="dg-box dg-rules">Checker<span class="sub">throws out anything the agents can't prove — the quoted phrase must be in the note, word for word</span></div>
           <div class="dg-arr">→</div>
-          <div class="dg-box dg-rules">Credit ledger<span class="sub">hard stop at the monthly budget</span></div>
+          <div class="dg-box dg-rules">Budget guard<span class="sub">hard stop at the monthly spend</span></div>
         </div>
       </div>
       <div class="dg-legend">
-        <span><span class="swatch" style="background:var(--rules);"></span>deterministic Python</span>
-        <span><span class="swatch" style="background:var(--agent);"></span>LLM call</span>
-        <span style="margin-left:auto; color:var(--ink);"><b>Deterministic orchestration — no language model decides what runs next.</b></span>
+        <span><span class="swatch" style="background:var(--rules);"></span>plain code — no AI</span>
+        <span><span class="swatch" style="background:var(--agent);"></span>an AI call</span>
+        <span style="margin-left:auto; color:var(--ink);"><b>A human wrote the order of operations. No model decides what runs next.</b></span>
       </div>
+      <p class="tbl-cap" style="margin-top:22px;">Built with Claude Code — the AI wrote a lot of this code. The decisions stayed mine: what the rules are, what counts as critical, what the agents may do, and what must be checked before anything is saved.</p>
     </div>
   </section>
 
   <!-- ================= SLIDE 3 — Demo 1: nightly agent run ================= -->
   <section class="slide">
     <p class="eyebrow">Live Project Demo<span class="demo-n"> · 1 of 3</span></p>
-    <h1>The nightly agent run<small>three recorded segments · committed replay recordings · 0 credits on camera</small></h1>
+    <h1>The night shift finds what rules can't<small>three segments · all replays of saved responses · 0 credits on camera</small></h1>
     <div class="cols">
       <div class="col" style="flex:1.1; justify-content:center;">
         <div class="card">
           <h3>The record — <span class="mono" style="text-transform:none; color:var(--ink);">E-WOW-01</span></h3>
-          <p>Internally consistent: vitals in range, codes valid, dates sane. The deterministic validator returns <strong class="rules-ink">0 issues</strong>.</p>
+          <p>Every vital sign in range. Every billing code valid. Every date sensible. My rules return <strong class="rules-ink">0 problems</strong> — and my rules are right.</p>
         </div>
         <div class="card edge-agent">
-          <h3>And it's wrong</h3>
-          <p>The note describes a <strong>62-year-old man</strong>; the structured data says a <strong>34-year-old woman</strong>. A wrong-patient note — no field-level rule can see it. You have to read the note against the chart.</p>
+          <h3>The record is still wrong</h3>
+          <p>The note describes a <strong>62-year-old man with high blood pressure</strong>. The data on that same record says <strong>34-year-old woman</strong>. Someone pasted one patient's note onto another patient's chart. Every field is individually fine — you have to read the note against the chart.</p>
         </div>
         <div class="cmd"><span class="prompt">$</span> python <span class="nb">-m</span> app.agents <span class="nb">--date 2026-07-14</span> <span class="nb">--mode replay</span></div>
       </div>
       <div class="col" style="flex:1; justify-content:center;">
         <div class="card">
           <h3>What comes back</h3>
-          <p><strong>4 critical findings</strong>, all on E-WOW-01 — <strong class="agent-ink">2 identity + 2 clinical</strong>: one underlying wrong-patient defect, caught from two angles by independent specialists.</p>
+          <p><strong>4 critical findings</strong>, all on E-WOW-01 — <strong class="agent-ink">2 identity + 2 clinical</strong>. Not four problems: <strong>one</strong> wrong-patient note, caught from two directions by two agents that didn't know about each other.</p>
         </div>
         <div class="kv">
-          <span>evidence <b>verbatim, guard-checked</b></span>
-          <span>dropped <b>0</b></span>
-          <span>clean control record <b>cleared</b></span>
+          <span>every finding's quoted phrase <b>confirmed in the note, word for word</b></span>
+          <span>thrown out <b>0</b></span>
+          <span>clean control record <b>came back clean</b></span>
           <span>credits spent <b>0</b></span>
         </div>
         <div class="card">
-          <p>The output is a <strong>worklist for a human</strong> — nothing auto-corrects the chart.</p>
+          <p>What comes out is a <strong>to-do list for a human</strong>. It never edits the chart itself.</p>
         </div>
       </div>
     </div>
@@ -345,31 +346,35 @@
   <!-- ================= SLIDE 4 — Demo 2: five-try comparison ================= -->
   <section class="slide">
     <p class="eyebrow">Live Project Demo<span class="demo-n"> · 2 of 3</span></p>
-    <h1>The rules win theirs<small>same 5 records · 15 planted problems · 5 tries · temp 0 · only the record order changed</small></h1>
+    <h1>The same test, five times<small>5 records · 15 problems I planted myself · 5 runs · temperature 0 · only the record order changed</small></h1>
     <div class="cols">
       <div class="col" style="flex:1; justify-content:center;">
         <div class="card">
-          <h3>How each try grades</h3>
-          <p><strong>caught</strong> · <strong style="color:var(--warning);">misgraded</strong> (wrong severity) · <strong style="color:var(--critical);">silent miss</strong> (nobody downstream knows) · <strong>false alarm</strong> (burns reviewer time)</p>
+          <h3>Four ways a run can go — example: blood oxygen reads 112%</h3>
+          <p><strong>caught</strong> — it reports it<br>
+          <strong style="color:var(--warning);">misgraded</strong> — reports it, calls it minor instead of critical<br>
+          <strong style="color:var(--critical);">silent miss</strong> — never mentions it; the report looks clean and nobody downstream finds out<br>
+          <strong>false alarm</strong> — flags a field that's fine; a human burns an afternoon proving it</p>
         </div>
         <div class="card edge-rules">
-          <p>The deterministic validator: <strong class="rules-ink">identical 15 / 15, all five tries</strong> — in milliseconds, for free.</p>
+          <p>My rules: <strong class="rules-ink">identical 15 / 15, all five runs</strong> — in milliseconds, for free.</p>
+          <p style="margin-top:14px;">The fair objection, raised up front: <strong>the answer key is my rules' own output</strong>, so of course they score 15/15 — they define the answer. The result that matters is that the AI, graded against that same fixed key, answered differently five times out of five.</p>
         </div>
         <div class="cmd"><span class="prompt">$</span> python <span class="nb">-m</span> app.agents.compare <span class="nb">--runs 5</span> <span class="nb">--mode replay</span></div>
       </div>
       <div class="col" style="flex:1; justify-content:center;">
         <table>
-          <thead><tr><th>try</th><th>caught</th><th>misgraded</th><th>missed</th><th>false alarms</th></tr></thead>
+          <thead><tr><th>run</th><th>caught</th><th>misgraded</th><th>silent miss</th><th>false alarms</th></tr></thead>
           <tbody>
             <tr><td>1</td><td><b>14</b></td><td>1</td><td>0</td><td>0</td></tr>
             <tr><td>2</td><td><b>14</b></td><td>0</td><td><span class="bad">1</span></td><td>0</td></tr>
             <tr><td>3</td><td><b>15</b></td><td>0</td><td>0</td><td><span class="warn">7</span></td></tr>
             <tr><td>4</td><td><b>14</b></td><td>1</td><td>0</td><td><span class="warn">4</span></td></tr>
             <tr><td>5</td><td><b>12</b></td><td>3</td><td>0</td><td>0</td></tr>
-            <tr class="rules-row"><td>rules, every try</td><td>15</td><td>0</td><td>0</td><td>0</td></tr>
+            <tr class="rules-row"><td>my rules, every run</td><td>15</td><td>0</td><td>0</td><td>0</td></tr>
           </tbody>
         </table>
-        <p class="tbl-cap">Q9 in <span class="mono">db/queries.sql</span> — SQL over the persisted grades, not a summary of them.</p>
+        <p class="tbl-cap">Q9 in <span class="mono">db/queries.sql</span> — this is SQL over the saved results. The database talking, not my summary of it.</p>
       </div>
     </div>
   </section>
@@ -377,23 +382,24 @@
   <!-- ================= SLIDE 5 — Demo 3: month-end auditor ================= -->
   <section class="slide">
     <p class="eyebrow">Live Project Demo<span class="demo-n"> · 3 of 3</span></p>
-    <h1>The month-end auditor<small>40 synthetic June records · 3 source systems · 4 planted patterns · one call over the whole month</small></h1>
+    <h1>Reading a whole month at once<small>40 June records · 3 hospital systems · 4 problems I planted in advance · one AI call over the whole month</small></h1>
     <div class="cols">
       <div class="col" style="flex:1; justify-content:center;">
         <div class="card">
-          <h3>Planted answer key — committed</h3>
+          <h3>The answers, written down and committed before I started</h3>
           <p class="mono" style="font-size:27px;">unit_conversion_meditech · copy_paste_note · gender_tone_bias · race_missing_zip</p>
+          <p style="margin-top:14px;">The night-shift agents read <strong>one record</strong> at a time. This one reads <strong>all of them together</strong>.</p>
         </div>
         <div class="card edge-warn">
           <h3>Framing rule</h3>
-          <p>The auditor flags <strong>documentation bias in the data</strong>, on a synthetic corpus with a known planted answer key — it does not diagnose people, and it does not accuse clinicians.</p>
+          <p>This flags <strong>bias in how the data was written down</strong>. It is synthetic data with an answer key I planted. It does not diagnose people, and it does not accuse clinicians.</p>
         </div>
         <div class="cmd"><span class="prompt">$</span> python <span class="nb">-m</span> app.agents.audit <span class="nb">--month 2026-06</span> <span class="nb">--mode replay</span> <span class="nb">--grade</span></div>
       </div>
       <div class="col" style="flex:1; justify-content:center;">
         <div>
           <p class="chart-title">Missing zip code by race — June corpus</p>
-          <p class="chart-sub">Q12 in <span class="mono">db/queries.sql</span> — SQL counts the asymmetry; the auditor only interprets it.</p>
+          <p class="chart-sub">Q12 in <span class="mono">db/queries.sql</span> — a database can count this. What it can't do is tell you what it means or what to do about it. That's the AI's job here.</p>
           <div class="bars">
             <div class="bar-row">
               <span class="bar-name">Black</span>
@@ -418,7 +424,8 @@
           </div>
         </div>
         <div class="card">
-          <p>The rules already caught all <strong>6 MEDITECH records</strong> sending Celsius values in a Fahrenheit field. SQL gets first crack at everything.</p>
+          <p><strong>SQL gets first crack at everything.</strong> It already caught all <strong>6 records</strong> from one hospital system sending Celsius temperatures into a field that's supposed to be Fahrenheit.</p>
+          <p style="margin-top:14px;">Graded against my planted answers: <strong>4 of 4 found · 0 thrown out for bad evidence · 0 credits</strong>, because it's a replay.</p>
         </div>
       </div>
     </div>
@@ -427,80 +434,80 @@
   <!-- ================= SLIDE 6 — Key Outcomes: the measured numbers ================= -->
   <section class="slide">
     <p class="eyebrow">Key Outcomes</p>
-    <h1>The measured numbers<small>every number: SQL over persisted grades, or a committed recording</small></h1>
+    <h1>What actually happened<small>every number: SQL over saved results, or a committed recording — none of it from memory</small></h1>
     <div class="tiles">
       <div class="tile" style="border-top:4px solid var(--agent);">
-        <span class="t-label">Demo 1 · wrong-patient record</span>
+        <span class="t-label">Demo 1 · the wrong-patient record</span>
         <span class="t-big">0 <span class="dim">→</span> 4</span>
-        <span class="t-sub"><b>0</b> rule issues → <b>4 grounded critical findings</b> from the agent batch · nothing fabricated</span>
+        <span class="t-sub">my rules found <b>0</b> problems, correctly → the agents found <b>4 critical</b> ones, each backed by the exact words it came from</span>
       </div>
       <div class="tile" style="border-top:4px solid var(--rules);">
-        <span class="t-label">Demo 2 · five tries</span>
+        <span class="t-label">Demo 2 · five runs</span>
         <span class="t-big">15/15 <span class="dim">×5</span></span>
-        <span class="t-sub">rules identical, every try · the LLM different every try: <b>1</b> silent miss, <b>5</b> wrong severities, <b>11</b> invented problems</span>
+        <span class="t-sub">rules identical, every run · the AI different every run: <b>1</b> silent miss, <b>5</b> wrong severities, <b>11</b> invented problems</span>
       </div>
       <div class="tile" style="border-top:4px solid var(--agent);">
-        <span class="t-label">Demo 3 · month-end audit</span>
+        <span class="t-label">Demo 3 · the whole month</span>
         <span class="t-big">4/4</span>
-        <span class="t-sub">planted patterns caught · <b>0</b> evidence dropped · replayed offline for <b>0</b> credits</span>
+        <span class="t-sub">planted patterns found · <b>0</b> thrown out for bad evidence · anyone can re-run it for <b>0</b> credits</span>
       </div>
     </div>
     <blockquote class="quote">
-      &ldquo;I ran both engines over the same 5 records five times. The rules: identical 15/15, every time. The AI: a different answer every time the record order changed &mdash; 1 silent miss, 5 wrong severities, 11 invented problems, one of them on a certified-clean record.&rdquo;
-      <span class="attr">measured 2026-07-16 · Q9 in db/queries.sql · both halves of the thesis held under measurement</span>
+      Both halves held. The agents won every job that needed reading &mdash; the wrong-patient note, the reworded copy-paste, the tone. The rules won every job with a fixed spec, and won it identically, every time.
+      <span class="attr">measured 2026-07-16 · Q9 in db/queries.sql</span>
     </blockquote>
   </section>
 
   <!-- ================= SLIDE 7 — Key Outcomes: the guard ================= -->
   <section class="slide">
     <p class="eyebrow">Key Outcomes</p>
-    <h1 style="font-size:60px;">The guard, and a failure I'm keeping<small>the deterministic guard caught the LLM breaking its own output contract — twice, live</small></h1>
+    <h1 style="font-size:60px;">The guard caught the AI breaking its own rules — twice, live<small>a failure I'm keeping, because it's the best evidence in the project</small></h1>
     <div class="steps" style="margin-bottom:34px;">
-      <div class="step"><span class="n">1</span><br><b>Both live auditor calls broke their JSON the same way</b> — an unescaped quote where the reply cited the aggregates block.</div>
+      <div class="step"><span class="n">1</span><br><b>Both live runs came back malformed</b> — the AI broke its own output format, the same way both times.</div>
       <div class="step-arr">→</div>
-      <div class="step"><span class="n">2</span><br><b>The guard quarantined both replies.</b> Nothing corrupted persisted, nothing silently swallowed.</div>
+      <div class="step"><span class="n">2</span><br><b>The guard quarantined both.</b> Nothing bad was saved, and nothing was quietly swallowed.</div>
       <div class="step-arr">→</div>
-      <div class="step"><span class="n">3</span><br><b>A test-pinned parse repair</b> recovered the genuine recording — no edit, no third try.</div>
+      <div class="step"><span class="n">3</span><br><b>A small repair, pinned by tests</b> against the real broken response — which is still in the repo, unedited, because it's evidence.</div>
       <div class="step-arr">→</div>
-      <div class="step"><span class="n">4</span><br>Total cost: <b>2 credits.</b></div>
+      <div class="step"><span class="n">4</span><br>Total cost: <b>2 credits.</b> No third try.</div>
     </div>
     <div class="cols" style="flex:0 1 auto;">
       <div class="col" style="flex:1;">
         <div class="card edge-warn" style="height:100%; box-sizing:border-box;">
-          <h3>Limit 1 — pinned by tests</h3>
-          <p><strong>Not an injection defence.</strong> An instruction riding inside the note gets cited verbatim, so the guard keeps it.</p>
+          <h3>What the checker can't do — 1</h3>
+          <p><strong>It won't stop a hidden instruction.</strong> Text telling the AI what to do, hiding inside a note, gets quoted word for word — so the checker keeps it.</p>
         </div>
       </div>
       <div class="col" style="flex:1;">
         <div class="card edge-warn" style="height:100%; box-sizing:border-box;">
-          <h3>Limit 2 — pinned by tests</h3>
-          <p><strong>Verbatim &ne; faithful.</strong> A model can cite <span class="mono">"dysuria"</span> out of <span class="mono">"denies dysuria"</span> — so a human adjudicates the worklist.</p>
+          <h3>What the checker can't do — 2</h3>
+          <p><strong>Word-for-word isn't the same as honest.</strong> A model can quote <span class="mono">"dysuria"</span> out of <span class="mono">"denies dysuria"</span>. That's why a human works the list.</p>
         </div>
       </div>
     </div>
-    <p class="bigline" style="margin-top:40px;">I did not let a language model decide control flow over patient data.</p>
+    <p class="bigline" style="margin-top:40px;">I did not let a language model decide what runs next over patient data.</p>
   </section>
 
   <!-- ================= SLIDE 8 — Way Forward ================= -->
   <section class="slide">
     <p class="eyebrow">Way Forward</p>
-    <h1>Four items</h1>
+    <h1>Four things I'd build next</h1>
     <div class="ways">
       <div class="way">
-        <h3>Adjudicator agent <span class="tag">deferred, not dropped</span></h3>
-        <p>When the clinical and identity specialists conflict on the same record, a third call judges the disagreement — a job rules genuinely can't do.</p>
+        <h3>A referee <span class="tag">deferred, not dropped</span></h3>
+        <p>When the identity agent and the clinical agent disagree about the same record, nothing resolves it today — both findings just sit there. A third agent judging that disagreement is a real job for an AI; rules can't do it.</p>
       </div>
       <div class="way">
-        <h3>Web UI</h3>
-        <p>Over the worklist and the trend queries.</p>
+        <h3>A web page</h3>
+        <p>So this is something a person clicks instead of something I type.</p>
       </div>
       <div class="way">
-        <h3>Postgres deploy on Render</h3>
-        <p>The SQLAlchemy Core code runs there unchanged; the free tier's 30-day clock is the only constraint, and synthetic data reloads fine.</p>
+        <h3>The database on a real server</h3>
+        <p>The code is already written to run there without changes. The free tier's 30-day clock is the only catch, and synthetic data reloads fine.</p>
       </div>
       <div class="way">
-        <h3>Real-corpus caveats</h3>
-        <p>Everything here is synthetic and planted. Real notes are messier — the grader and the bias framing both need rework before this touches anything real.</p>
+        <h3>Real notes are messier than mine</h3>
+        <p>Every record here is synthetic and every problem in it was planted by me. Before this touches anything real, the grading and the bias framing both need to be rebuilt.</p>
       </div>
     </div>
   </section>
@@ -509,8 +516,8 @@
   <section class="slide">
     <p class="eyebrow">Close</p>
     <div class="close-wrap">
-      <p class="bigline" style="font-size:56px;">Every claim traces to a committed recording or a SQL query you can re-run.</p>
-      <p class="lede">The rules kept the jobs with fixed specs. The agents took the jobs that need reading. A deterministic layer checked the agents' work.<br><br><strong style="color:var(--ink);">I gave each job to the tool that's good at it.</strong></p>
+      <p class="bigline" style="font-size:56px;">Every claim here traces back to a saved recording or a SQL query you can run yourself.</p>
+      <p class="lede">The rules kept the jobs with fixed specs. The agents took the jobs that need reading. And a layer that isn't AI at all checked the agents' work before any of it counted.<br><br><strong style="color:var(--ink);">I gave each job to the tool that's good at it.</strong></p>
       <p class="cmd" style="align-self:flex-start; margin:0;">github.com/airwolff/EHR-Validator</p>
     </div>
   </section>

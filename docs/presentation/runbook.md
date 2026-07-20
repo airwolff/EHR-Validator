@@ -12,30 +12,51 @@ Segments, in recording order:
 
 ---
 
-## 0. Terminal prep (before you hit record)
+## RECORDING FORMAT: ONE CONTINUOUS TAKE
+
+Decided 2026-07-20. The deck lives on one macOS desktop, the terminal on another, and the
+whole talk is recorded in a single pass with a three-finger swipe between them. **No editing.**
+
+What that changes:
+
+- **Everything below must be staged before you press record.** There is no cutting room. Run
+  Step A to completion, verify its output matches, and only then start recording.
+- **Steps B and C happen ON CAMERA**, between Segment 2 and Segment 3. They cannot be
+  pre-staged — Segment 1 breaks if the June month is loaded first (see the order rule below).
+  This is fine; narrate it as "now I load the month's 40 records." Pipe Step C through
+  `| tail -4` so it doesn't spray 40 lines across the screen.
+- **A fumble means a full retake.** Keep Step A on the clipboard so a restart is one paste
+  away, and do a dry run of the whole sequence before the real take.
+- Record the **screen area covering both desktops' content** — with `Cmd-Shift-5`, choose
+  **"Record Entire Screen"**, not "Record Selected Portion". A portion selection does not
+  follow a desktop swipe.
+
+## 0. Prep (before you hit record)
 
 - Font size **18pt or larger** — check Terminal/iTerm preferences, not just a one-off zoom.
-- **Dark theme.** Light backgrounds blow out on screen recordings.
-- **Window sized to 16:9** — e.g. resize so the window is roughly 1280×720 or 1920×1080.
-  Drag a corner and watch the pixel readout most terminal apps show while resizing.
+- **Dark theme.** Light backgrounds blow out on screen recordings, and the deck is dark by
+  design so the two match.
+- Terminal maximized on its own desktop; `deck.html` open full-screen on the other.
 - `cd` to the repo root (`/Users/andywolff/Desktop/projects/sql_portfolio/ehr-triage`) before
   you start — every command below assumes that as the working directory.
 - Clear scrollback (`Cmd-K` in Terminal.app) so the recording starts clean.
+- Silence notifications (Do Not Disturb) — a banner mid-take costs you the whole take.
+- Run **Step A** and confirm its output. Then record.
 
 ## macOS screen recording how-to
 
 1. `Cmd-Shift-5` opens the capture toolbar.
-2. Choose **"Record Selected Portion"**, then drag the selection box to match the terminal
-   window (this is why the window is sized to 16:9 first).
+2. Choose **"Record Entire Screen"** (see the format note above — required for desktop swipes).
 3. Click **Record**. A countdown starts, then it's live.
 4. Stop from the menu-bar icon (square in a circle) or `Cmd-Shift-5` again → Stop.
-5. The clip lands on the Desktop as a `.mov` — rename it per segment before trimming
-   (e.g. `demo1-nightly-batch.mov`).
+5. The clip lands on the Desktop as a `.mov`.
 
-## Still-shot fallback (one per segment, if a recording is unusable)
+## Still-shot fallback
 
-Take these as plain screenshots (`Cmd-Shift-4`) at the moment noted, in case a segment's
-recording is lost or has to be cut for time:
+Not required by the assignment — Mahima's spec asks only for the four sections in 15 minutes,
+with no format or screenshot requirement. Keep these as insurance only, taken with
+`Cmd-Shift-4` during the dry run, in case a take is unusable and you have to fall back to
+narrating over stills:
 
 1. **Segment 1** — the batch's `worklist` JSON array (4 critical findings on `E-WOW-01`).
 2. **Segment 2** — the Q9 scorecard table in the sqlite3 shell (5 rows, one per run).
@@ -64,6 +85,10 @@ steps run in matters, not just which data ends up loaded:
 So: reset + load the 2 batch fixtures (Step A) → run Segment 1 → run Segment 2 (order-
 independent, fine to run here) → THEN load the June month data (Step B/C) → run Segment 3.
 That is the exact order below and the exact order to record in.
+
+**One-take consequence:** Step A happens before you press record. Steps B and C happen on
+camera, between Segment 2 and Segment 3 — there is no way to pre-load the month without
+breaking Segment 1.
 
 ### Step A — reset the DB and load the two batch-demo fixtures in hash-matching order
 
@@ -359,6 +384,11 @@ wrote 40 records to payloads/month
 ```
 python load_results.py --fixtures --payload-dir payloads/month --no-init
 ```
+
+On camera this prints one line per record — about 45 lines — and scrolls. That's fine; talk
+over it ("loading the month's 40 records"). If you'd rather keep the screen quiet, append
+`| tail -6`, but run it once in the dry run first to confirm what that leaves on screen — the
+tail count below was verified for the unpiped command only.
 
 **Expected output (verified, tail):**
 
