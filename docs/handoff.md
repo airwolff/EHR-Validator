@@ -4,85 +4,101 @@ Read `CLAUDE.md` and `docs/phase-checklist.md` first, then this. See `docs/sessi
 for how to use/update this file.
 
 ## Staleness block (check before trusting)
-- **Written:** 2026-07-19
-- **HEAD at write time:** `80cb847` (branch `main`; the commit carrying this handoff is one
+- **Written:** 2026-07-19 (evening)
+- **HEAD at write time:** `0664f5d` (branch `main`; the commit carrying this handoff is one
   `[docs]` commit on top — that alone is not drift)
-- **Uncommitted at write time:** clean (this file + decisions entry are the only changes,
-  committed right after)
-- **Tests:** `python -m pytest -q` → **181 passed in 0.83s** (verified 2026-07-19)
+- **Uncommitted at write time:** clean (this file is the only change, committed right after)
+- **Tests:** `python -m pytest -q` → **210 passed in 1.01s** (verified 2026-07-19)
 - **Boots?** Yes — `python -c "import app.main"` → `boots` (verified 2026-07-19)
 - **Staleness test:** if HEAD moved past the docs commit or `git status -s` differs, trust git +
   code and rewrite this early.
 
 ## Where we are
 
-**The pipeline build is complete (through Task 13). This session designed the final
-presentation AND a new build item — the month-end auditor agent — and produced an approved
-spec and a full implementation plan. NOTHING from that plan is built yet; no plan code has
-been written or run.**
+**The month-end auditor is BUILT, LIVE-RUN, and GRADED: 4/4 planted patterns caught, 0 evidence
+dropped, replay reproduces it for 0 credits.** All presentation assets are committed. The
+2026-07-18 plan's Tasks 1–11 are done via subagent-driven development, each task reviewed;
+per-task record is `.superpowers/sdd/progress.md` (the old Task-13 ledger is archived next to it).
 
-- Spec (approved by Andy): `docs/superpowers/specs/2026-07-18-month-end-auditor-design.md`
-  (commit `0494f7f`). The why lives there and in `docs/decisions.md` 2026-07-19 entry.
-- Plan (12 tasks, full code in steps): `docs/superpowers/plans/2026-07-18-month-end-auditor.md`
-  (commit `80cb847`). Tasks 1–6 = TDD build of the auditor; Task 7 = **Andy-gated live run
-  (1 credit)**; Tasks 8–12 = docs, runbook, script, deck, handoff.
+Verified by running this session:
+- Auditor code: Tasks 1–6 landed as `e95a2de → bec8eaa` (demographics table, month generator +
+  committed answer key, corpus/aggregates reads + Q12, audit module, orchestration + CLI,
+  grading + Q13). Suite went 181 → 210, green at every commit.
+- **The live-run story (2 credits, ledger now 12/15, 3 remain):** BOTH live audit calls broke
+  their own JSON contract identically — unescaped double-quotes where the reply cited the
+  AGGREGATES block. The abort path quarantined both; nothing was persisted. Andy chose a
+  parse-time repair over a third credit: `_repair_quote_values` (commit `3cc3dde`), TDD-pinned
+  against the real quarantined reply. The second recording was then un-quarantined and read
+  as-is (`aad5716`) — the recording file itself was never edited. First failed reply is committed
+  evidence: `app/agents/recordings/auditor-3bd3022bd092.json.rejected` (commit `e379327`).
+- Graded replay (`python -m app.agents.audit --month 2026-06 --mode replay --grade`): 4 patterns
+  returned, 4 kept, 0 dropped, 0 credits; grades caught × 4; `invented: 1` (grader term-tie
+  footnote: copy_paste_note matched the gender-bias pattern; the templated-note pattern counts
+  as "invented"). Re-run reproduces identical output.
+- Docs updated with measured numbers (`80bbf75`): phase-checklist Task 14, decisions.md
+  2026-07-19 entry (the durable why lives THERE), for-review.md.
+- **Presentation assets, all committed:**
+  - `docs/presentation/runbook.md` (`663856b`) — three replay demo segments, every command run
+    and verified; includes two load-ordering rules that are easy to break (see Gotchas).
+  - `docs/presentation/script.md` (`34a88bb`) — 1,876 spoken words = 14.43 min at 130 wpm,
+    9 slides, rubric headings as spoken transitions, reviewer-verified facts/voice/timing.
+  - `docs/presentation/deck.html` (`0664f5d`) — 9 slides, keyboard nav, dark, self-contained.
+    Published as a **private Artifact**: https://claude.ai/code/artifact/ea6fbc13-b3db-4dba-ba2e-7064afb4ed4b
+    (republish same file path from a session to update the same URL).
+- Local DB state: the runbook's full sequence was left in place — all three demos work in order
+  against the current `ehr_triage.db`.
 
-**The deadline that drives everything:** AiXcelerate presentation slot is **Tue Jul 21,
-9:30–11:00 EST** (Mahima's reschedule email, Jul 16). Andy may not be able to attend and asked
-to submit a **recorded video on YouTube** — no confirmed answer, a "second slot" was mentioned.
-Requirements from Mahima's Jul 1 email: **15 minutes**, must cover **Project Objective, Live
-Project Demo, Key Outcomes, Way Forward** (these four appear verbatim as slide labels in the
-plan). Working assumption: **the recording must exist by end of Mon Jul 20.**
+**Deadline:** presentation slot Tue Jul 21, 9:30–11:00 EST; Andy plans a recorded YouTube video;
+working assumption remains **recording exists by end of Mon Jul 20**. The Sat-night fallback rule
+is MOOT — the auditor made it; Demo 3 is in.
 
-Presentation decisions (all settled with Andy — do not re-ask):
-- **Recorded video**, 15 min; audience = cohort + hiring team + mentor.
-- **HTML deck published as a private Artifact**, presented full-screen while recording.
-- **Three live screen-recorded demo segments**, all from committed replay recordings, zero
-  credits: nightly batch (wow record), five-try comparison, month-end audit.
-- **Story-first structure** (minute map in the spec) with rubric headings on slides.
-- **Script in Andy's voice** — profile saved to Claude memory (`andy-writing-voice`):
-  numbers first, short declaratives, comma splices, plain verbs, no hype, no exclamation marks.
-
-**Credits:** ledger 10/15 spent, sidebar ≈8.8 left (resets Aug 11). The plan budgets ≤2 live
-audit calls. Nothing was spent this session.
+**Final whole-branch review (base `dabda57`, head `0664f5d`): READY WITH FOLLOW-UPS — zero
+Critical/Important findings.** All five cross-task checks passed (repair can't corrupt parseable
+replies; no schema drift; committed recordings contain no key material; fingerprint fully
+deterministic; docs/deck/script numbers mutually consistent). Optional follow-ups (none block
+anything) are listed at the end of `.superpowers/sdd/progress.md`: fix the answer-key prose
+("~8% baseline", "M031-M040"), add tests for unknown-coalescing / empty-zip / exact-2-hit
+grading boundary, use `schema._evidence_reasons` for finer drop reasons, add `<!doctype html>`
+to deck.html, scope Q13 by month+mode.
 
 ## ► Next step (do this first)
 
-**Execute the plan, Task 1** (`docs/superpowers/plans/2026-07-18-month-end-auditor.md`),
-via superpowers:subagent-driven-development (recommended in-plan) or executing-plans.
-Two open items Andy has NOT yet answered — ask before the first commit:
-1. Execution approach (subagent-driven vs inline).
-2. Blanket approval for the plan's per-task commits (messages are written in the plan).
-   Without it, pause for approval at every commit. **Task 7's live call is a hard stop for
-   Andy's explicit go-ahead regardless.**
-
-**The fallback rule is in the spec and is binding:** if the auditor isn't graded and green by
-end of Sat Jul 19 (hard: Sun morning), it drops to Way Forward, Demo 3 is cut, and the deck
-ships with the two-demo map. The presentation never waits on the agent.
+1. **Andy's own pass:** he will rewrite deck + script wording "to make it more human" (his words,
+   this session). The HTML is `docs/presentation/deck.html`; keep facts/numbers unchanged — every
+   number is measured and cross-verified against the DB.
+2. **Record the video** following `docs/presentation/runbook.md` top to bottom (prep section →
+   Step A → Segment 1 → Segment 2 → Steps B/C → Segment 3). Replay only; zero credits.
 
 ## Dead ends — don't retry
-- **Don't re-run the Task-13 live comparison to "confirm"** — temp 0 doesn't make tries
-  identical (that's the finding); replay reproduces the graded run for free.
-- **Don't trust the old 60s Lyzr timeout**; it ate a credit once. Set `LYZR_TIMEOUT_SECONDS=180`
-  in `.env` before the live audit call — the audit message is ~4× the comparison message.
-- The full pre-Task-13 dead-end list is in `docs/decisions.md` 2026-07-14→17 entries, each
-  pinned by a test; don't re-litigate.
-- Gmail MCP token expired once mid-session; if mail is needed again and errors, Andy re-auths
-  via `/mcp` → claude.ai Gmail.
+
+- **Do NOT make a third live audit call.** Both tries failed the same way (JSON escaping), the
+  ≤2-call budget is spent, and the graded result already exists via replay of the genuine
+  recording. There is nothing a third credit buys.
+- **Don't "fix" the failure by editing recordings** — the repair lives in the parser
+  (`_repair_quote_values`), tested in `tests/test_audit_module.py`; recordings are evidence and
+  stay byte-exact.
+- **Don't load the June month before running Demo 1** — `get_noted_records()` has no date
+  filter; June's 42 noted records would flood the nightly batch and break replay. Order rules
+  are explicit in the runbook ("Known state going in" + Step A).
+- **Don't re-run the Task-13 live comparison**; replay reproduces the graded run free (prior
+  handoff's rule, still binding).
+- The pre-auditor dead-end list is in `docs/decisions.md` 2026-07-14→17 entries.
 
 ## Gotchas / carry-forward
-- **Report month is `2026-06` everywhere** (generator SEED 20260601, tests, demo commands).
-- **Message purity is load-bearing** for the auditor exactly as for the specialists: the audit
-  message is fingerprinted for replay — `sort_keys=True`, sorted corpus, no timestamps.
-- **Generator determinism is tested** (same seed → identical bytes). If a planted-rate test
-  fails, adjust the seed constant, not the assertions.
-- **Answer key terms ↔ grading tests are coupled** (`scripts/audit_answer_key.json` ↔
-  `tests/test_audit_grading.py`) — change them together.
-- **Bias framing rule** (spec + prompt): the auditor flags documentation bias IN THE DATA on a
-  synthetic corpus with planted defects; it does not diagnose people or accuse clinicians.
+
+- **Wow-record phrasing:** 4 critical findings on E-WOW-01 = **2 identity-domain + 2
+  clinical-domain, one underlying wrong-patient defect**. Never say "4 identity criticals" —
+  the old shorthand is wrong and the deck/script/runbook all carry the corrected framing.
+- **Report month is `2026-06` everywhere**; generator SEED 20260601; regenerating the month is
+  byte-identical (`scripts/generate_month.py --out payloads/month`).
+- **Grader footnote to say out loud if asked:** grades are 4/4 caught but `invented: 1` — the
+  dumb term-grader matched copy_paste_note to the gender-bias pattern on a term tie
+  ("identical" + "template" appear in both). It's in decisions.md; the script handles it.
+- `LYZR_TIMEOUT_SECONDS=240` is set in `.env` (plan wanted ≥180). Replay needs no key.
+- Deck is deliberately dark-only (slides intercut with dark terminal recordings — CSS comment
+  explains). Artifact is private until Andy shares it.
 - Severity ladder = plausibility of the datum, NOT survivability (`CLAUDE.md`).
-- `db/queries.sql` UPPERCASE keywords (hook), `decisions.md` append-only (hook), quarantined
-  `.rejected` recordings are committed evidence, `payloads/`/`.env`/`ehr_triage.db` gitignored.
-- Replay is free and needs no `.env` key; only `--mode live` touches Lyzr, ledger-gated.
-- The 5 canonical fixtures live in `tests/fixtures/payloads/`; the generated month will live in
-  `payloads/month/` (gitignored — the committed generator script recreates it byte-identically).
+- `db/queries.sql` UPPERCASE (hook), `decisions.md` append-only (hook), `payloads/`/`.env`/
+  `ehr_triage.db` gitignored, quarantined `.rejected` recordings are committed evidence.
+- SDD scratch (briefs/reports/review packages) lives in `.superpowers/sdd/` — gitignored except
+  the progress ledger convention; `git clean -fdx` would destroy it (recover from `git log`).
