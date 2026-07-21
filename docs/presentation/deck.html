@@ -123,39 +123,39 @@
   .flowline .arr { color: var(--muted); }
 
   /* ==== architecture diagram (slide 2) ==== */
-  .diagram { display: flex; flex-direction: column; gap: 26px; flex: 1; min-height: 0; justify-content: center; }
-  .dg-row { display: flex; align-items: center; gap: 18px; }
+  .diagram { display: flex; flex-direction: column; gap: 20px; flex: 1; min-height: 0; justify-content: center; }
+  .dg-row { display: flex; align-items: center; gap: 14px; }
   .dg-box {
     background: var(--surface); border: 2px solid var(--hairline); border-radius: 10px;
-    padding: 18px 24px; font-size: 28px; line-height: 1.3; text-align: center;
+    padding: 14px 18px; font-size: 24px; line-height: 1.25; text-align: center;
     flex: 1; min-width: 0;
   }
-  .dg-box .sub { display: block; font-size: 23px; color: var(--muted); margin-top: 6px; }
+  .dg-box .sub { display: block; font-size: 19px; color: var(--muted); margin-top: 5px; }
   .dg-rules { border-color: var(--rules); background: var(--rules-dim); }
   .dg-agent { border-color: var(--agent); background: var(--agent-dim); }
-  .dg-arr { font-size: 42px; color: var(--muted); flex: none; line-height: 1; }
-  .dg-stack { display: flex; flex-direction: column; gap: 14px; flex: 1.35; min-width: 0; }
+  .dg-arr { font-size: 34px; color: var(--muted); flex: none; line-height: 1; }
+  .dg-stack { display: flex; flex-direction: column; gap: 12px; flex: 1.35; min-width: 0; }
   .dg-stack .dg-box { flex: none; }
   .dg-band {
     border: 1px solid var(--hairline); border-radius: 14px;
-    padding: 24px 28px; background: rgba(255,255,255,0.02);
+    padding: 18px 22px; background: rgba(255,255,255,0.02);
   }
   .dg-band-label {
-    font-size: 24px; letter-spacing: 0.12em; text-transform: uppercase;
-    color: var(--muted); font-weight: 700; margin: 0 0 18px;
+    font-size: 22px; letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--muted); font-weight: 700; margin: 0 0 14px;
   }
-  .dg-legend { display: flex; gap: 44px; font-size: 26px; color: var(--ink-2); }
+  .dg-legend { display: flex; gap: 40px; font-size: 23px; color: var(--ink-2); }
   .dg-legend .swatch {
     display: inline-block; width: 26px; height: 26px; border-radius: 6px;
     vertical-align: -4px; margin-right: 12px;
   }
 
   /* ==== tables ==== */
-  table { border-collapse: collapse; font-variant-numeric: tabular-nums; width: 100%; }
-  th, td { padding: 12px 26px; font-size: 30px; text-align: right; }
+  table { border-collapse: collapse; font-variant-numeric: tabular-nums; width: 100%; table-layout: fixed; }
+  th, td { padding: 12px 14px; font-size: 28px; text-align: right; }
   th:first-child, td:first-child { text-align: left; white-space: nowrap; }
   th {
-    font-size: 23px; letter-spacing: 0.1em; text-transform: uppercase;
+    font-size: 21px; letter-spacing: 0.06em; text-transform: uppercase;
     color: var(--muted); font-weight: 700; border-bottom: 2px solid var(--hairline);
   }
   td { border-bottom: 1px solid var(--hairline); color: var(--ink-2); }
@@ -279,9 +279,9 @@
           <div class="dg-box dg-agent">An AI agent<span class="sub">Claude Sonnet · temp 0 · every call saved and replayable</span></div>
         </div>
         <div class="dg-arr">→</div>
-        <div class="dg-box" style="flex:1.2;">Both fill in the same form<span class="sub mono">what's broken · what's wrong · how bad · how to fix</span></div>
+        <div class="dg-box" style="flex:1.2;">Both fill in the same form<span class="sub mono">broken · wrong · how bad · how to fix</span></div>
         <div class="dg-arr">→</div>
-        <div class="dg-box">One database<span class="sub">SQLite now, Postgres on a server later — same code</span></div>
+        <div class="dg-box">One database<span class="sub">SQLite now, Postgres later</span></div>
         <div class="dg-arr">→</div>
         <div class="dg-box" style="flex:0.8;">SQL over everything</div>
       </div>
@@ -295,7 +295,7 @@
             <div class="dg-box dg-agent">Identity specialist<span class="sub">is this even the right person?</span></div>
           </div>
           <div class="dg-arr">→</div>
-          <div class="dg-box dg-rules">Checker<span class="sub">throws out anything the agents can't prove — the quoted phrase must be in the note, word for word</span></div>
+          <div class="dg-box dg-rules">Checker<span class="sub">drops anything an agent can't prove — quote must be in the note, word for word</span></div>
           <div class="dg-arr">→</div>
           <div class="dg-box dg-rules">Budget guard<span class="sub">hard stop at the monthly spend</span></div>
         </div>
@@ -303,9 +303,9 @@
       <div class="dg-legend">
         <span><span class="swatch" style="background:var(--rules);"></span>plain code — no AI</span>
         <span><span class="swatch" style="background:var(--agent);"></span>an AI call</span>
-        <span style="margin-left:auto; color:var(--ink);"><b>A human wrote the order of operations. No model decides what runs next.</b></span>
+        <span style="margin-left:auto; color:var(--ink);"><b>A human wrote the order. No model decides what runs next.</b></span>
       </div>
-      <p class="tbl-cap" style="margin-top:22px;">Built with Claude Code — the AI wrote a lot of this code. The decisions stayed mine: what the rules are, what counts as critical, what the agents may do, and what must be checked before anything is saved.</p>
+      <p class="tbl-cap" style="margin-top:16px;">Built with Claude Code — the AI wrote much of the code; the decisions stayed mine.</p>
     </div>
   </section>
 
@@ -349,22 +349,21 @@
     <h1>The same test, five times<small>5 records · 15 problems I planted myself · 5 runs · temperature 0 · only the record order changed</small></h1>
     <div class="cols">
       <div class="col" style="flex:1; justify-content:center;">
-        <div class="card">
-          <h3>Four ways a run can go — example: blood oxygen reads 112%</h3>
-          <p><strong>caught</strong> — it reports it<br>
-          <strong style="color:var(--warning);">misgraded</strong> — reports it, calls it minor instead of critical<br>
-          <strong style="color:var(--critical);">silent miss</strong> — never mentions it; the report looks clean and nobody downstream finds out<br>
-          <strong>false alarm</strong> — flags a field that's fine; a human burns an afternoon proving it</p>
+        <div class="card" style="font-size:26px; padding:22px 28px;">
+          <h3>Four ways a run can go — e.g. oxygen reads 112%</h3>
+          <p><strong>caught</strong> — reports it &nbsp;·&nbsp; <strong style="color:var(--warning);">misgraded</strong> — reports it, calls it minor<br>
+          <strong style="color:var(--critical);">silent miss</strong> — never mentions it; report looks clean, nobody downstream knows<br>
+          <strong>false alarm</strong> — flags a field that's fine; wastes a reviewer's time</p>
         </div>
-        <div class="card edge-rules">
-          <p>My rules: <strong class="rules-ink">identical 15 / 15, all five runs</strong> — in milliseconds, for free.</p>
-          <p style="margin-top:14px;">The fair objection, raised up front: <strong>the answer key is my rules' own output</strong>, so of course they score 15/15 — they define the answer. The result that matters is that the AI, graded against that same fixed key, answered differently five times out of five.</p>
+        <div class="card edge-rules" style="font-size:26px; padding:22px 28px;">
+          <p>My rules: <strong class="rules-ink">identical 15 / 15, all five runs</strong> — in milliseconds, free.</p>
+          <p style="margin-top:12px;">Fair objection up front: <strong>the key is my rules' own output</strong>, so 15/15 is by definition. The point is the AI, graded on that same key, answered differently all five runs.</p>
         </div>
         <div class="cmd"><span class="prompt">$</span> python <span class="nb">-m</span> app.agents.compare <span class="nb">--runs 5</span> <span class="nb">--mode replay</span></div>
       </div>
       <div class="col" style="flex:1; justify-content:center;">
         <table>
-          <thead><tr><th>run</th><th>caught</th><th>misgraded</th><th>silent miss</th><th>false alarms</th></tr></thead>
+          <thead><tr><th>run</th><th>caught</th><th>misgr.</th><th>miss</th><th>false</th></tr></thead>
           <tbody>
             <tr><td>1</td><td><b>14</b></td><td>1</td><td>0</td><td>0</td></tr>
             <tr><td>2</td><td><b>14</b></td><td>0</td><td><span class="bad">1</span></td><td>0</td></tr>
@@ -382,13 +381,13 @@
   <!-- ================= SLIDE 5 — Demo 3: month-end auditor ================= -->
   <section class="slide">
     <p class="eyebrow">Live Project Demo<span class="demo-n"> · 3 of 3</span></p>
-    <h1>Reading a whole month at once<small>40 June records · 3 hospital systems · 4 problems I planted in advance · one AI call over the whole month</small></h1>
+    <h1>Reading a whole month at once<small>40 June records · 3 systems · 4 planted problems · one AI call</small></h1>
     <div class="cols">
       <div class="col" style="flex:1; justify-content:center;">
         <div class="card">
           <h3>The answers, written down and committed before I started</h3>
-          <p class="mono" style="font-size:27px;">unit_conversion_meditech · copy_paste_note · gender_tone_bias · race_missing_zip</p>
-          <p style="margin-top:14px;">The night-shift agents read <strong>one record</strong> at a time. This one reads <strong>all of them together</strong>.</p>
+          <p class="mono" style="font-size:25px;">unit_conversion_meditech · copy_paste_note · gender_tone_bias · race_missing_zip</p>
+          <p style="margin-top:12px;">Night-shift agents read <strong>one record</strong>. This reads <strong>all of them together</strong>.</p>
         </div>
         <div class="card edge-warn">
           <h3>Framing rule</h3>
